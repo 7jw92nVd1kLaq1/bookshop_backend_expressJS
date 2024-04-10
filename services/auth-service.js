@@ -1,13 +1,14 @@
-const crypto = require('crypto');
 const { sign, verify } = require('jsonwebtoken');
 
 const { secret } = require('../config');
 const pool = require('../db');
+
 const { PasswordResetCodeNotFoundOrExpiredError } = require('../exceptions/auth-exceptions');
 const { InternalServerError } = require('../exceptions/generic-exceptions');
-const { formatDateToYYYYMMDDHHMMSS } = require('../utils/datetime-utils');
 
-const { getUserByEmail } = require('./users-service');
+const { formatDateToYYYYMMDDHHMMSS } = require('../utils/datetime-utils');
+const { generatePasswordResetHash } = require('../utils/hash-utils');
+
 
 const createToken = (payload, options) => {
     return sign(payload, secret, options);
@@ -78,16 +79,14 @@ const validatePasswordResetCode = async (code) => {
     return result[0];
 }
 
-const generatePasswordResetCode = async (connection, email) => {
-    const code = crypto.randomBytes(32).toString('hex');
+const generatePasswordResetCode = async (connection, user_id) => {
+    const code = generatePasswordResetHash();
     const rightNow = Date.now();
     const createdAt = formatDateToYYYYMMDDHHMMSS(rightNow);
     const expiredAt = formatDateToYYYYMMDDHHMMSS(rightNow + 3600000);
 
-    const user = await getUserByEmail(email);
-
     const query = 'INSERT INTO passwd_resets (users_id, url_code, created_at, expired_at) VALUES (?, ?, ?, ?)';
-    const values = [user.id, code, createdAt, expiredAt];
+    const values = [user_id, code, createdAt, expiredAt];
 
     let result;
     try {

@@ -10,9 +10,10 @@ const {
     createUserToken, 
     generatePasswordResetCode,
     validatePasswordResetCode,
-    markPasswordResetCodeAsUsed
+    markPasswordResetCodeAsUsed,
 } = require('../services/auth-service');
-const { comparePassword } = require('../utils/auth-utils');
+
+const { comparePlaintextToBcryptHash } = require('../utils/hash-utils');
 
 
 const signUp = async (req, res) => {
@@ -39,12 +40,10 @@ const signUp = async (req, res) => {
             message: 'User created'
         });
     } catch (error) {
-        if (error.statusCode) {
-            return res.status(error.statusCode).json({
-                message: error.message
-            });
-        }
-        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        await connection.rollback();
+
+        const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
+        return res.status(statusCode).json({
             message: error.message || 'Internal server error'
         });
     } finally {
@@ -62,7 +61,7 @@ const signIn = async (req, res) => {
 
     try {
         const user = await getUserByEmail(email);
-        const isPasswordValid = await comparePassword(password, user.password);
+        const isPasswordValid = await comparePlaintextToBcryptHash(password, user.password);
         if (!isPasswordValid) {
             return res.status(StatusCodes.UNAUTHORIZED).json({
                 message: 'Invalid email or password'
@@ -105,23 +104,33 @@ const initiatePasswordResetProcess = async (req, res) => {
         });
     }
 
+    let user; 
+    try {
+        user = await getUserByEmail(email);
+    } catch (error) {
+        if (error.name && error.name === 'UserNotFoundError') {
+            return res.status(StatusCodes.CREATED).json({
+                message: 'Password reset code sent to your email'
+            });
+        }
+        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+            message: error.message || 'Internal server error'
+        });
+    }
+
     const connection = await pool.getConnection();
     await connection.beginTransaction();
 
     try {
-        const code = await generatePasswordResetCode(connection, email);
+        await generatePasswordResetCode(connection, user.id);
         await connection.commit();
         return res.status(StatusCodes.CREATED).json({
             message: 'Password reset code sent to your email'
         });
     } catch (error) {
         await connection.rollback();
+
         const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
-        if (error.name && error.name === 'UserNotFoundError') {
-            return res.status(StatusCodes.CREATED).json({
-                message: 'Password reset code sent to your email'
-            });
-        }
         return res.status(statusCode).json({
             message: error.message || 'Internal server error'
         });
@@ -166,6 +175,7 @@ const completePasswordResetProcess = async (req, res) => {
         });
     } catch (error) {
         await connection.rollback();
+
         const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
         return res.status(statusCode).json({
             message: error.message || 'Internal server error'

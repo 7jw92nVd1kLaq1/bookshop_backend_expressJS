@@ -8,7 +8,7 @@ const {
 } = require('../exceptions/users-exceptions');
 const { InternalServerError } = require('../exceptions/generic-exceptions');
 
-const { generatePasswordHash } = require('../utils/auth-utils');
+const { generateBcryptHash } = require('../utils/hash-utils');
 
 const checkEmailRequirements = (email) => {
     const emailLength = email && email.length <= 320;
@@ -75,7 +75,7 @@ const createUser = async (connection, email, password, nickname) => {
         throw new UserAlreadyExistsError();
     }
     
-    const passwordHash = await generatePasswordHash(password);
+    const passwordHash = await generateBcryptHash(password);
     const query = 'INSERT INTO users (email, password, nickname) VALUES (?, ?, ?)';
     const values = [email, passwordHash, nickname];
     let result;
@@ -101,8 +101,7 @@ const changeUserPassword = async (connection, user_id, password) => {
     }
 
     await getUserById(user_id);
-
-    const passwordHash = await generatePasswordHash(password);
+    const passwordHash = await generateBcryptHash(password);
     const query = 'UPDATE users SET password = ? WHERE id = ?';
     const values = [passwordHash, user_id];
 
