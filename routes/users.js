@@ -1,19 +1,14 @@
 const express = require('express');
 const router = express.Router();
 
+const { signUp } = require('../controllers/users-controller');
+
 router.get('/', (req, res) => {
     const { keywords, sortBy, sortOrder, page, amount } = req.query;
     res.send(`Users: sortBy=${sortBy}, sortOrder=${sortOrder}, page=${page}, amount=${amount}`);
 });
 
-router.post('/', (req, res) => {
-    const { name, email, password } = req.body;
-    res.send(`User created: name=${name}, email=${email}, password=${password}`);
-});
-
-router.post('/password-reset', (req, res) => {
-    res.send('Password reset');
-});
+router.post('/', signUp);
 
 router.get('/:id', (req, res) => {
     const viewMode = req.get('X-View-Mode');

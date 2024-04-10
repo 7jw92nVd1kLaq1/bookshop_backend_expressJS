@@ -18,7 +18,7 @@ app.use(cookieParser());
 app.use('/books', booksRouter);
 app.use('/users', usersRouter);
 app.use('/publishers', publishersRouter);
-app.use('/authentication', authenticationRouter);
+app.use('/', authenticationRouter);
 app.use('/categories', categoriesRouter);
 app.use('/authors', authorsRouter);
 app.use('/carts', cartsRouter);

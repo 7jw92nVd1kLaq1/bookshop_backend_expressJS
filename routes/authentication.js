@@ -1,13 +1,21 @@
 const express = require('express');
 const router = express.Router();
 
-router.post('/login', (req, res) => {
-    const { email, password } = req.body;
-    res.send(`User logged in: email=${email}, password=${password}`);
-});
+const { 
+    signIn,
+    signOut,
+    initiatePasswordResetProcess, 
+    completePasswordResetProcess 
+} = require('../controllers/users-controller');
+const { 
+    allowAccessToLoggedInUser,
+    denyAccessToLoggedInUser 
+} = require('../middlewares/auth-middleware');
 
-router.get('/logout', (req, res) => {
-    res.send('User logged out');
-});
+router.post('/login', denyAccessToLoggedInUser, signIn);
+router.get('/logout', allowAccessToLoggedInUser, signOut);
+
+router.post('/password-reset', denyAccessToLoggedInUser, initiatePasswordResetProcess);
+router.put('/password-reset/:resetCode', denyAccessToLoggedInUser, completePasswordResetProcess);
 
 module.exports = router;
