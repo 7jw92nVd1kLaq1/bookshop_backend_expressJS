@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { signUp } = require('../controllers/users-controller');
+const { signUp } = require('../controllers/auth-controller');
 
 router.get('/', (req, res) => {
     const { keywords, sortBy, sortOrder, page, amount } = req.query;

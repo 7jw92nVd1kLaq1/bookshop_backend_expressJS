@@ -28,6 +28,8 @@ const signUp = async (req, res) => {
 
     try {
         const user = await createUser(connection, email, password, nickname);
+        await connection.commit();
+
         const token = createUserToken(user);
         res.cookie('token', token, {
             httpOnly: true

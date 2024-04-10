@@ -6,7 +6,7 @@ const {
     signOut,
     initiatePasswordResetProcess, 
     completePasswordResetProcess 
-} = require('../controllers/users-controller');
+} = require('../controllers/auth-controller');
 const { 
     allowAccessToLoggedInUser,
     denyAccessToLoggedInUser 
