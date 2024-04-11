@@ -1,5 +1,28 @@
 const { verifyToken } = require('../services/auth-service');
 
+const adminOnly = async (req, res, next) => {
+    const token = req.cookies.token;
+    if (!token) {
+        return res.status(403).json({
+            message: 'Forbidden'
+        });
+    }
+
+    try {
+        const decodedToken = verifyToken(token);
+        if (decodedToken.weight !== 10) {
+            return res.status(403).json({
+                message: 'Forbidden'
+            });
+        }
+        return next();
+    } catch (error) {
+        return res.status(403).json({
+            message: 'Forbidden'
+        });
+    }
+}
+
 const allowAccessToLoggedInUser = async (req, res, next) => {
     const token = req.cookies.token;
     if (!token) {
@@ -27,7 +50,7 @@ const denyAccessToLoggedInUser = async (req, res, next) => {
     }
 
     try {
-        const decodedToken = verifyToken(token);
+        verifyToken(token);
         return res.status(403).json({
             message: 'Forbidden'
         });
@@ -38,6 +61,7 @@ const denyAccessToLoggedInUser = async (req, res, next) => {
 };
 
 module.exports = {
+    adminOnly,
     allowAccessToLoggedInUser,
     denyAccessToLoggedInUser
 };

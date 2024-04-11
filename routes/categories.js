@@ -1,5 +1,12 @@
+const { param } = require('express-validator');
 const express = require('express');
 const router = express.Router();
+
+const {
+    fetchBooksByCategory
+} = require('../controllers/categories-controller');
+const { validate } = require('../middlewares/validate-middleware');
+
 
 router.post('/', (req, res) => {
     const { name, description } = req.body;
@@ -28,10 +35,13 @@ router.put('/:id', (req, res) => {
     res.send(`Category updated: id=${id}, name=${name}, description=${description}`);
 });
 
-router.get('/:id/books', (req, res) => {
-    const { keywords, page, amount, sortBy, sortOrder } = req.query;
-    const { id } = req.params;
-    res.send(`Category books: id=${id}, page=${page}, amount=${amount}, sortBy=${sortBy}, sortOrder=${sortOrder}`);
-});
+router.get(
+    '/:id/books',
+    [
+        param('id').isInt().toInt(),
+        validate
+    ],
+    fetchBooksByCategory
+);
 
 module.exports = router;

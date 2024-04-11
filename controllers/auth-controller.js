@@ -4,7 +4,8 @@ const pool = require('../db');
 const { 
     changeUserPassword,
     createUser, 
-    getUserByEmail 
+    getUserByEmail,
+    getUserByEmailWithHighestRole
 } = require('../services/users-service');
 const { 
     createUserToken, 
@@ -60,13 +61,21 @@ const signIn = async (req, res) => {
     }
 
     try {
-        const user = await getUserByEmail(email);
+        const columns = [
+            'users.id AS sub', 
+            'users.email AS email', 
+            'users.password AS password', 
+            'users.nickname AS nickname'
+        ];
+        let user = await getUserByEmailWithHighestRole(email, columns);
         const isPasswordValid = await comparePlaintextToBcryptHash(password, user.password);
         if (!isPasswordValid) {
             return res.status(StatusCodes.UNAUTHORIZED).json({
                 message: 'Invalid email or password'
             });
         }
+
+        delete user.password;
 
         const token = createUserToken(user);
         res.cookie('token', token, {

@@ -7,8 +7,46 @@ const {
     UserAlreadyExistsError
 } = require('../exceptions/users-exceptions');
 const { InternalServerError } = require('../exceptions/generic-exceptions');
-
 const { generateBcryptHash } = require('../utils/hash-utils');
+const { 
+    SelectQueryBuilder,
+} = require('../utils/sql-utils');
+
+
+const assignUserRoles = async (connection, user_id, roles) => {
+    const query = 'INSERT INTO users_roles (user_id, roles_id) VALUES ?';
+    const values = roles.map(role => [user_id, role]);
+
+    let result;
+    try {
+        [result] = await connection.query(query, [values]);
+    } catch (error) {
+        console.log(`DB error occurred in "assignUserRoles": ${error.message}`);
+        throw new InternalServerError('Error occurred while assigning user roles. Please try again.');
+    }
+
+    if (!result.affectedRows) {
+        throw new InternalServerError('User roles were not assigned. Please try again.');
+    }
+
+    return true;
+};
+
+const getAvailableRoles = async () => {
+    const query = 'SELECT id, name FROM roles';
+
+    let roles;
+    try {
+        const [rows] = await pool.query(query);
+        roles = rows;
+    } catch (error) {
+        console.log(`DB error occurred in "checkAvailableRoles": ${error.message}`);
+        throw new InternalServerError('Error occurred while fetching available roles. Please try again.');
+    }
+
+    return roles;
+};
+
 
 const checkEmailRequirements = (email) => {
     const emailLength = email && email.length <= 320;
@@ -74,25 +112,36 @@ const createUser = async (connection, email, password, nickname) => {
     if (user) {
         throw new UserAlreadyExistsError();
     }
+
+    const roles = await getAvailableRoles();
+    const userRole = roles.find(role => role.name === 'User');
     
     const passwordHash = await generateBcryptHash(password);
-    const query = 'INSERT INTO users (email, password, nickname) VALUES (?, ?, ?)';
-    const values = [email, passwordHash, nickname];
-    let result;
+
+    const userGenerateQuery = 'INSERT INTO users (email, password, nickname) VALUES (?, ?, ?)';
+    const userValues = [email, passwordHash, nickname];
+    const roleGenerateQuery = 'INSERT INTO users_roles (users_id, roles_id) VALUES (?, ?)';
+    const roleValues = [user_id, userRole.id];
+
+    let usersResult;
+    let rolesResult;
     try {
-        [result] = await connection.query(query, values);
+        [usersResult] = await connection.query(userGenerateQuery, userValues);
+        [rolesResult] = await connection.query(roleGenerateQuery, roleValues);
         await connection.commit();
     } catch (error) {
         await connection.rollback();
         console.log(`DB error occurred in "createUser": ${error.message}`);
         throw new InternalServerError('Error occurred while creating user. Please try again.');
+    } finally {
+        connection.release();
     }
 
-    if (!result.insertId) {
+    if (!usersResult.insertId || !rolesResult.insertId) {
         throw new InternalServerError('User was not created. Please try again.');
     }
     
-    return {id: result.insertId, email, nickname};
+    return {sub: result.insertId, email, nickname, role: userRole.name, role_weight: userRole.weight};
 };
 
 const changeUserPassword = async (connection, user_id, password) => {
@@ -100,7 +149,7 @@ const changeUserPassword = async (connection, user_id, password) => {
         throw new PasswordDoesNotMeetRequirementsError();
     }
 
-    await getUserById(user_id);
+    await getUserById(user_id, ['id']);
     const passwordHash = await generateBcryptHash(password);
     const query = 'UPDATE users SET password = ? WHERE id = ?';
     const values = [passwordHash, user_id];
@@ -120,10 +169,14 @@ const changeUserPassword = async (connection, user_id, password) => {
     return true;
 };
 
-const getUserByEmail = async (email) => {
-    const query = 'SELECT * FROM users WHERE email = ?';
-
+const getUserByEmail = async (email, columns = ['*'], joins = []) => {
     let user;
+
+    const builder = new SelectQueryBuilder();
+    builder.select(columns).from('users').where('email = ?');
+    joins.forEach(j => builder.join(j.table, j.on));
+    const query = builder.build();
+
     try {
         const [results] = await pool.query(query, [email]);
         user = results[0];
@@ -140,10 +193,14 @@ const getUserByEmail = async (email) => {
     return user;
 };
 
-const getUserById = async (id) => {
-    const query = 'SELECT * FROM users WHERE id = ?';
-
+const getUserById = async (id, columns = ['*'], joins = []) => {
     let user;
+
+    const builder = new SelectQueryBuilder();
+    builder.select(columns).from('users').where('id = ?');
+    joins.forEach(j => builder.join(j.table, j.on));
+    const query = builder.build();
+
     try {
         const [results] = await pool.query(query, [id]);
         user = results[0];
@@ -160,9 +217,38 @@ const getUserById = async (id) => {
     return user;
 }
 
+const getUserByEmailWithHighestRole = async (email, columns = ['*'], joins = []) => {
+    let rows;
+
+    const builder = new SelectQueryBuilder();
+    builder
+        .select(columns)
+        .from('users')
+        .where('users.email = ?')
+        .join('users_roles', 'users.id = users_roles.users_id')
+        .join('roles', 'users_roles.roles_id = roles.id')
+        .limit(1);
+    joins.forEach(j => builder.join(j.table, j.on));
+    const query = builder.build();
+
+    try {
+        [rows] = await pool.query(query, [email]);
+    } catch (error) {
+        console.log(`DB error occurred in "getUserByEmailWithHighestRole": ${error.message}`);
+        throw new InternalServerError('Error occurred while fetching user with roles. Please try again.');
+    }
+
+    if (!rows.length) {
+        throw new UserNotFoundError();
+    }
+
+    return rows[0];
+};
+
 module.exports = {
     changeUserPassword,
     createUser,
     getUserByEmail,
+    getUserByEmailWithHighestRole,
     getUserById
 };

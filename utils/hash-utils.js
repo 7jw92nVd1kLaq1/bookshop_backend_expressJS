@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { saltRounds } = require('../config');
 
-const generatePasswordResetHash = () => {
+const generateRandomHash = () => {
     return crypto.randomBytes(32).toString('hex');
 };
 
@@ -18,6 +18,6 @@ const comparePlaintextToBcryptHash = async (plaintext, hash) => {
 
 module.exports = {
     generateBcryptHash,
-    generatePasswordResetHash,
+    generateRandomHash,
     comparePlaintextToBcryptHash
 };

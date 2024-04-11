@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
 
+const { 
+    fetchAllBooks,
+    fetchBookById
+} = require('../controllers/books-controller');
+
 router.post('/', (req, res) => {
     const {
         title,
@@ -20,16 +25,8 @@ router.post('/', (req, res) => {
     res.send(`Book created: title=${title}, description=${description}, authorId=${authorId}, categoryId=${categoryId}, ISBN=${ISBN}, publicationDate=${publicationDate}, publisher=${publisher}, price=${price}, currency=${currency}, pages=${pages}, format=${format}, edition=${edition}, language=${language}`);
 });
 
-router.get('/', (req, res) => {
-    const { keywords, sortBy, sortOrder, page, amount } = req.query;
-    res.send(`Books: sortBy=${sortBy}, sortOrder=${sortOrder}, page=${page}, amount=${amount}`);
-});
-
-router.get('/:id', (req, res) => {
-    const viewMode = req.get('X-View-Mode');
-    const { id } = req.params;
-    res.send(`Book: id=${id}`);
-});
+router.get('/', fetchAllBooks);
+router.get('/:id', fetchBookById);
 
 router.delete('/:id', (req, res) => {
     const { id } = req.params;

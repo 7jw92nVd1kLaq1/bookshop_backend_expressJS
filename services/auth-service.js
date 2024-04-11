@@ -7,7 +7,7 @@ const { PasswordResetCodeNotFoundOrExpiredError } = require('../exceptions/auth-
 const { InternalServerError } = require('../exceptions/generic-exceptions');
 
 const { formatDateToYYYYMMDDHHMMSS } = require('../utils/datetime-utils');
-const { generatePasswordResetHash } = require('../utils/hash-utils');
+const { generateRandomHash } = require('../utils/hash-utils');
 
 
 const createToken = (payload, options) => {
@@ -22,14 +22,14 @@ const createUserToken = (user) => {
     if (!user) {
         throw new Error('User is required');
     }
-    if (!user.id) {
+    if (!user.sub) {
         throw new Error('User ID is required');
     }
     if (!user.email) {
         throw new Error('User email is required');
     }
     return createToken(
-        { sub: user.id, email: user.email },
+        user,
         { expiresIn: '1h', issuer: 'bookstore-api'}
     );
 };
@@ -80,7 +80,7 @@ const validatePasswordResetCode = async (code) => {
 }
 
 const generatePasswordResetCode = async (connection, user_id) => {
-    const code = generatePasswordResetHash();
+    const code = generateRandomHash();
     const rightNow = Date.now();
     const createdAt = formatDateToYYYYMMDDHHMMSS(rightNow);
     const expiredAt = formatDateToYYYYMMDDHHMMSS(rightNow + 3600000);
