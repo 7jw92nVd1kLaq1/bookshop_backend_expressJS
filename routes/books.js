@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { param } = require('express-validator');
+const { param, query } = require('express-validator');
 
 const { 
     fetchAllBooks,
@@ -27,7 +27,14 @@ router.post('/', (req, res) => {
     res.send(`Book created: title=${title}, description=${description}, authorId=${authorId}, categoryId=${categoryId}, ISBN=${ISBN}, publicationDate=${publicationDate}, publisher=${publisher}, price=${price}, currency=${currency}, pages=${pages}, format=${format}, edition=${edition}, language=${language}`);
 });
 
-router.get('/', fetchAllBooks);
+router.get(
+    '/', 
+    [
+        query('page').optional().isInt().toInt(),
+        query('amount').optional().isInt().toInt(),
+    ],
+    fetchAllBooks
+);
 router.get(
     '/:id', 
     [

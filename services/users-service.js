@@ -157,7 +157,9 @@ const changeUserPassword = async (connection, user_id, password) => {
         throw new PasswordDoesNotMeetRequirementsError();
     }
 
+    // Check if user exists, if not, throw an error
     await getUserById(user_id, ['id']);
+
     const passwordHash = await generateBcryptHash(password);
     const query = 'UPDATE users SET password = ? WHERE id = ?';
     const values = [passwordHash, user_id];
@@ -178,24 +180,15 @@ const changeUserPassword = async (connection, user_id, password) => {
 };
 
 const getAllUsers = async ({columns = ['*'], joins = [], limit = null, orderBy = []}) => {
-    let users;
-
     // Building a query string
     const builder = new SelectQueryBuilder();
     builder.select(columns).from('users');
     joins.forEach(j => builder.join(j.table, j.on));
     orderBy.forEach(o => builder.orderBy(o.column, o.order));
     if (limit) builder.limit(limit);
-    const query = builder.build();
 
-    try {
-        const [results] = await promisePool.query(query);
-        users = results;
-    }
-    catch (error) {
-        console.log(`DB error occurred in "getAllUsers": ${error.message}`);
-        throw new InternalServerError('Error occurred while fetching users. Please try again.');
-    }
+    const query = builder.build();
+    const users = await query.run();
 
     if (!users.length) {
         throw new UserNotFoundError();
@@ -205,21 +198,13 @@ const getAllUsers = async ({columns = ['*'], joins = [], limit = null, orderBy =
 };
 
 const getUserByEmail = async (email, options = {columns: ['*'], joins : []}) => {
-    let user;
-
     const builder = new SelectQueryBuilder();
     builder.select(options.columns).from('users').where('email = ?');
     options.joins.forEach(j => builder.join(j.table, j.on));
-    const query = builder.build();
 
-    try {
-        const [results] = await promisePool.query(query, [email]);
-        user = results[0];
-    }
-    catch (error) {
-        console.log(`DB error occurred in "getUserByEmail": ${error.message}`);
-        throw new InternalServerError('Error occurred while fetching user. Please try again.');
-    }
+    const query = builder.build();
+    const users = await query.run([email]);
+    const user = users[0];
 
     if (!user) {
         throw new UserNotFoundError();
@@ -229,21 +214,13 @@ const getUserByEmail = async (email, options = {columns: ['*'], joins : []}) => 
 };
 
 const getUserById = async (id, options = {columns: ['*'], joins : []}) => {
-    let user;
-
     const builder = new SelectQueryBuilder();
     builder.select(options.columns).from('users').where('id = ?');
     options.joins.forEach(j => builder.join(j.table, j.on));
-    const query = builder.build();
 
-    try {
-        const [results] = await promisePool.query(query, [id]);
-        user = results[0];
-    }
-    catch (error) {
-        console.log(`DB error occurred in "getUserById": ${error.message}`);
-        throw error;
-    }
+    const query = builder.build();
+    const users = await query.run([id]);
+    const user = users[0];
 
     if (!user) {
         throw new UserNotFoundError();

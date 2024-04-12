@@ -8,6 +8,7 @@ const { InternalServerError } = require('../exceptions/generic-exceptions');
 
 const { formatDateToYYYYMMDDHHMMSS } = require('../utils/datetime-utils');
 const { generateRandomHash } = require('../utils/hash-utils');
+const { SelectQueryBuilder } = require('../utils/sql-utils');
 
 
 const createToken = (payload, options) => {
@@ -61,22 +62,23 @@ const validatePasswordResetCode = async (code) => {
     const rightNow = Date.now();
     const now = formatDateToYYYYMMDDHHMMSS(rightNow);
 
-    const query = 'SELECT * FROM passwd_resets WHERE url_code = ? AND expired_at > ? AND used = 0';
+    const builder = new SelectQueryBuilder();
+    builder
+        .select(['*'])
+        .from('passwd_resets')
+        .where('url_code = ?')
+        .where('expired_at > ?')
+        .where('used = 0');
+
+    const query = builder.build();
     const values = [code, now];
+    const rows = await query.run(values);
 
-    let result;
-    try {
-        [result] = await promisePool.query(query, values);
-    } catch (error) {
-        console.log(`DB error occurred in "validatePasswordResetCode": ${error.message}`);
-        throw new InternalServerError('Error occurred while validating password reset code. Please try again.');
-    }
-
-    if (!result.length) {
+    if (!rows.length) {
         throw new PasswordResetCodeNotFoundOrExpiredError();
     }
 
-    return result[0];
+    return rows[0];
 }
 
 const generatePasswordResetCode = async (connection, user_id) => {

@@ -1,4 +1,6 @@
+const { InternalServerError } = require('../exceptions/generic-exceptions');
 const { InvalidColumnError } = require('../exceptions/sql-exceptions');
+const { promisePool } = require('../db');
 
 
 class Validator {
@@ -6,7 +8,6 @@ class Validator {
         throw new Error('validate method must be implemented.');
     }
 }
-
 
 class SQLKeywordsValidator extends Validator {
     static mysqlKeywords = [
@@ -63,6 +64,42 @@ class SQLKeywordsValidator extends Validator {
     }
 }
 
+
+class Query {
+    constructor() {
+        if (this.constructor === Query) {
+            throw new Error('Cannot instantiate an abstract class.');
+        }
+    }
+    async run() {
+        throw new Error('run method must be implemented.');
+    }
+}
+
+class SelectQuery extends Query {
+    constructor(queryString) {
+        super();
+        if (typeof queryString !== 'string') {
+            throw new Error('Query must be a string.');
+        }
+
+        this.query = queryString;
+    }
+
+    async run(args = []) {
+        if (!Array.isArray(args)) {
+            throw new Error('Arguments must be an array.');
+        }
+
+        try {
+            const [rows] = await promisePool.query(this.query, args);
+            return rows;
+        } catch (error) {
+            console.log(`DB error occurred in "SelectQuery.run": ${error.message}`);
+            throw new InternalServerError('Error occurred while fetching data. Please try again.');
+        }
+    }
+}
 
 // Still in progress / Experimenting
 class SelectQueryBuilder {
@@ -258,7 +295,7 @@ class SelectQueryBuilder {
             queryString += ` OFFSET ${this.query.offset}`;
         }
 
-        return queryString;
+        return new SelectQuery(queryString);
     }
 }
 

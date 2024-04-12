@@ -7,22 +7,14 @@ const {
 
 
 const getAllBooks = async ({columns = ['*'], joins = [], offset = null, limit = null}) => {
-    let books;
-
     const builder = new SelectQueryBuilder();
     builder.select(columns).from('books');
     if (limit) builder.limit(limit);
     if (offset) builder.offset(offset);
     joins.forEach(j => builder.join(j.table, j.on));
-    const query = builder.build();
 
-    try {
-        const [rows] = await promisePool.query(query);
-        books = rows;
-    } catch (error) {
-        console.log(`DB error occurred in "getAllBooks": ${error.message}`);
-        throw new InternalServerError('Error occurred while fetching books. Please try again.');
-    }
+    const query = builder.build();
+    const books = await query.run();
 
     if (!books.length) {
         throw new BooksNotFoundError();
@@ -31,22 +23,14 @@ const getAllBooks = async ({columns = ['*'], joins = [], offset = null, limit = 
     return books;
 };
 
-const getBookById = async (id, options = {columns: ['*'], joins: [], limit: null}) => {
-    let book;
-
+const getBookById = async (id, options = {columns: ['*'], joins: []}) => {
     const builder = new SelectQueryBuilder();
     builder.select(options.columns).from('books').where(`id = ?`);
-    if (options.limit) builder.limit(options.limit);
     options.joins.forEach(j => builder.join(j.table, j.on));
     const query = builder.build();
 
-    try {
-        const [results] = await promisePool.query(query, [id]);
-        book = results[0];
-    } catch (error) {
-        console.log(`DB error occurred in "getBookById": ${error.message}`);
-        throw new InternalServerError('Error occurred while fetching book. Please try again.');
-    }
+    const books = await builder.run();
+    const book = books[0];
 
     if (!book) {
         throw new BooksNotFoundError();
@@ -56,21 +40,13 @@ const getBookById = async (id, options = {columns: ['*'], joins: [], limit: null
 };
 
 const getBooksByAuthor = async (authors_id, options = {columns: ['*'], joins: [], limit: null}) => {
-    let books;
-
     const builder = new SelectQueryBuilder();
     builder.select(options.columns).from('books').where(`authors_id = ?`);
     if (options.limit) builder.limit(options.limit);
     options.joins.forEach(j => builder.join(j.table, j.on));
     const query = builder.build();
 
-    try {
-        const [rows] = await promisePool.query(query, [authors_id]);
-        books = rows;
-    } catch (error) {
-        console.log(`DB error occurred in "getBooksByAuthor": ${error.message}`);
-        throw new InternalServerError('Error occurred while fetching books. Please try again.');
-    }
+    const books = await query.run([authors_id]);
 
     if (!books.length) {
         throw new BooksNotFoundError();
@@ -79,22 +55,20 @@ const getBooksByAuthor = async (authors_id, options = {columns: ['*'], joins: []
     return books;
 };
 
-const getBooksByCategory = async (categories_id, options = {columns: ['*'], joins: [], limit: null}) => {
+const getBooksByCategory = async (
+    categories_id, 
+    options = {columns: ['*'], joins: [], limit: null, offset: null}
+) => {
     let books;
 
     const builder = new SelectQueryBuilder();
     builder.select(options.columns).from('books').where('`categories_id` = ?');
     if (options.limit) builder.limit(options.limit);
+    if (options.offset) builder.offset(options.offset);
     options.joins.forEach(j => builder.join(j.table, j.on));
     const query = builder.build();
 
-    try {
-        const [rows] = await promisePool.query(query, [categories_id]);
-        books = rows;
-    } catch (error) {
-        console.log(`DB error occurred in "getBooksByCategory": ${error.message}`);
-        throw new InternalServerError('Error occurred while fetching books. Please try again.');
-    }
+    books = await query.run([categories_id]);
 
     if (books.length) {
         return books;
@@ -104,8 +78,6 @@ const getBooksByCategory = async (categories_id, options = {columns: ['*'], join
 };
 
 const getBooksReleasedInTheLastMonth = async (options = {columns: ['*'], joins: [], limit: null}) => {
-    let books;
-
     const builder = new SelectQueryBuilder();
     builder.select(options.columns).from('books')
     builder.where('created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)');
@@ -113,13 +85,7 @@ const getBooksReleasedInTheLastMonth = async (options = {columns: ['*'], joins: 
     options.joins.forEach(j => builder.join(j.table, j.on));
     const query = builder.build();
 
-    try {
-        const [rows] = await promisePool.query(query);
-        books = rows;
-    } catch (error) {
-        console.log(`DB error occurred in "getBooksReleasedInTheLastMonth": ${error.message}`);
-        throw new InternalServerError('Error occurred while fetching books. Please try again.');
-    }
+    const books = await query.run();
 
     if (books.length) {
         return books;
