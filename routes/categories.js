@@ -1,4 +1,4 @@
-const { param } = require('express-validator');
+const { param, query } = require('express-validator');
 const express = require('express');
 const router = express.Router();
 
@@ -39,6 +39,8 @@ router.get(
     '/:id/books',
     [
         param('id').isInt().toInt(),
+        query('page').optional().isInt().toInt(),
+        query('amount').optional().isInt().toInt(),
         validate
     ],
     fetchBooksByCategory

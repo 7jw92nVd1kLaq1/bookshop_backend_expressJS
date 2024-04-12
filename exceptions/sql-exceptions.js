@@ -1,3 +1,11 @@
+class KeywordDetectedError extends Error {
+  constructor(message = 'Keyword found') {
+    super(message);
+    this.statusCode = 400;
+    this.name = 'ForbiddenWordError';
+  }
+}
+
 class InvalidColumnError extends Error {  
   constructor(message = 'Invalid column name') {
     super(message);
@@ -6,6 +14,8 @@ class InvalidColumnError extends Error {
   }
 }
 
+
 module.exports = {
+  KeywordDetectedError,
   InvalidColumnError
 }; 

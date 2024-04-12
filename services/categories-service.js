@@ -1,4 +1,4 @@
-const pool = require('../db');
+const { promisedPool } = require('../db');
 const { CategoryNotFoundError } = require('../exceptions/categories-exceptions');
 const { stringifyColumns } = require('../utils/sql-utils');
 
@@ -27,7 +27,7 @@ const getAllCategories = async (columns = ['id', 'name', 'description']) => {
 
     let categories;
     try {
-        const [rows] = await pool.query(query);
+        const [rows] = await promisedPool.query(query);
         categories = rows;
     } catch (error) {
         console.log(`DB error occurred in "getAllCategories": ${error.message}`);
@@ -47,7 +47,7 @@ const getCategoryById = async (id, columns = ['id', 'name', 'description']) => {
 
     let category;
     try {
-        const [rows] = await pool.query(query, [id]);
+        const [rows] = await promisedPool.query(query, [id]);
         category = rows[0];
     } catch (error) {
         console.log(`DB error occurred in "getCategoryById": ${error.message}`);

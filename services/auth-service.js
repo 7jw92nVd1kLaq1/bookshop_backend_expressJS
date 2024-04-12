@@ -1,7 +1,7 @@
 const { sign, verify } = require('jsonwebtoken');
 
 const { secret } = require('../config');
-const pool = require('../db');
+const { promisePool } = require('../db');
 
 const { PasswordResetCodeNotFoundOrExpiredError } = require('../exceptions/auth-exceptions');
 const { InternalServerError } = require('../exceptions/generic-exceptions');
@@ -66,7 +66,7 @@ const validatePasswordResetCode = async (code) => {
 
     let result;
     try {
-        [result] = await pool.query(query, values);
+        [result] = await promisePool.query(query, values);
     } catch (error) {
         console.log(`DB error occurred in "validatePasswordResetCode": ${error.message}`);
         throw new InternalServerError('Error occurred while validating password reset code. Please try again.');

@@ -1,11 +1,10 @@
 const { StatusCodes } = require('http-status-codes');
 
-const pool = require('../db');
+const { promisePool } = require('../db');
 const { 
     changeUserPassword,
     createUser, 
     getUserByEmail,
-    getUserByEmailWithHighestRole
 } = require('../services/users-service');
 const { 
     createUserToken, 
@@ -17,7 +16,7 @@ const {
 const { comparePlaintextToBcryptHash } = require('../utils/hash-utils');
 
 
-const signUp = async (req, res) => {
+const signUp = async (req, res, next) => {
     const { nickname, email, password } = req.body;
     if (!nickname || !email || !password) {
         return res.status(StatusCodes.BAD_REQUEST).json({
@@ -25,7 +24,7 @@ const signUp = async (req, res) => {
         });
     }
 
-    const connection = await pool.getConnection();
+    const connection = await promisePool.getConnection();
     await connection.beginTransaction();
 
     try {
@@ -42,17 +41,13 @@ const signUp = async (req, res) => {
         });
     } catch (error) {
         await connection.rollback();
-
-        const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
-        return res.status(statusCode).json({
-            message: error.message || 'Internal server error'
-        });
+        next(error);
     } finally {
         connection.release();
     }
 };
 
-const signIn = async (req, res) => {
+const signIn = async (req, res, next) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(StatusCodes.BAD_REQUEST).json({
@@ -65,9 +60,22 @@ const signIn = async (req, res) => {
             'users.id AS sub', 
             'users.email AS email', 
             'users.password AS password', 
-            'users.nickname AS nickname'
+            'users.nickname AS nickname',
+            'roles.name AS role',
+            'roles.weight AS weight'
         ];
-        let user = await getUserByEmailWithHighestRole(email, columns);
+        const joins = [
+            {
+                table: 'users_roles',
+                on: 'users.id = users_roles.users_id'
+            },
+            {
+                table: 'roles',
+                on: 'users_roles.roles_id = roles.id'
+            }
+        ];
+
+        let user = await getUserByEmail(email, { columns, joins })
         const isPasswordValid = await comparePlaintextToBcryptHash(password, user.password);
         if (!isPasswordValid) {
             return res.status(StatusCodes.UNAUTHORIZED).json({
@@ -91,10 +99,7 @@ const signIn = async (req, res) => {
                 message: 'Invalid email or password'
             });
         }
-        const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
-        return res.status(statusCode).json({
-            message: error.message || 'Internal server error'
-        });
+        next(error);
     }
 };
 
@@ -105,7 +110,7 @@ const signOut = (req, res) => {
     });
 };
 
-const initiatePasswordResetProcess = async (req, res) => {
+const initiatePasswordResetProcess = async (req, res, next) => {
     const { email } = req.body;
     if (!email) {
         return res.status(StatusCodes.BAD_REQUEST).json({
@@ -127,7 +132,7 @@ const initiatePasswordResetProcess = async (req, res) => {
         });
     }
 
-    const connection = await pool.getConnection();
+    const connection = await promisePool.getConnection();
     await connection.beginTransaction();
 
     try {
@@ -138,17 +143,13 @@ const initiatePasswordResetProcess = async (req, res) => {
         });
     } catch (error) {
         await connection.rollback();
-
-        const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
-        return res.status(statusCode).json({
-            message: error.message || 'Internal server error'
-        });
+        next(error);
     } finally {
         connection.release();
     }
 };
 
-const completePasswordResetProcess = async (req, res) => {
+const completePasswordResetProcess = async (req, res, next) => {
     const { resetCode } = req.params;
     const { password, confirmPassword } = req.body;
 
@@ -170,7 +171,7 @@ const completePasswordResetProcess = async (req, res) => {
         });
     }
     
-    const connection = await pool.getConnection();
+    const connection = await promisePool.getConnection();
     await connection.beginTransaction();
 
     try {
@@ -184,11 +185,7 @@ const completePasswordResetProcess = async (req, res) => {
         });
     } catch (error) {
         await connection.rollback();
-
-        const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
-        return res.status(statusCode).json({
-            message: error.message || 'Internal server error'
-        });
+        next(error);
     } finally {
         connection.release();
     }

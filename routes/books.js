@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const { param } = require('express-validator');
 
 const { 
     fetchAllBooks,
     fetchBookById
 } = require('../controllers/books-controller');
+const { validate } = require('../middlewares/validate-middleware');
 
 router.post('/', (req, res) => {
     const {
@@ -26,7 +28,14 @@ router.post('/', (req, res) => {
 });
 
 router.get('/', fetchAllBooks);
-router.get('/:id', fetchBookById);
+router.get(
+    '/:id', 
+    [
+        param('id').isInt().toInt(),
+        validate
+    ],
+    fetchBookById
+);
 
 router.delete('/:id', (req, res) => {
     const { id } = req.params;

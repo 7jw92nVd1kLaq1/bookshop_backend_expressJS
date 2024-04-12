@@ -12,6 +12,8 @@ const {
     denyAccessToLoggedInUser 
 } = require('../middlewares/auth-middleware');
 
+
+/* Routes */
 router.post('/login', denyAccessToLoggedInUser, signIn);
 router.get('/logout', allowAccessToLoggedInUser, signOut);
 

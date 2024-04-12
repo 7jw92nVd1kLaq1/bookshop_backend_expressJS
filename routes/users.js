@@ -2,13 +2,20 @@ const express = require('express');
 const router = express.Router();
 
 const { signUp } = require('../controllers/auth-controller');
+const { denyAccessToLoggedInUser } = require('../middlewares/auth-middleware');
 
+
+/* Routes */
 router.get('/', (req, res) => {
     const { keywords, sortBy, sortOrder, page, amount } = req.query;
     res.send(`Users: sortBy=${sortBy}, sortOrder=${sortOrder}, page=${page}, amount=${amount}`);
 });
 
-router.post('/', signUp);
+router.post(
+    '/', 
+    denyAccessToLoggedInUser, 
+    signUp
+);
 
 router.get('/:id', (req, res) => {
     const viewMode = req.get('X-View-Mode');

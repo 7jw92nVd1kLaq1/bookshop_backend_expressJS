@@ -6,29 +6,27 @@ const {
 } = require('../services/books-service');
 
 
-const fetchAllBooks = async (req, res) => {
+const fetchAllBooks = async (req, res, next) => {
+    const { page, amount } = req.query;
     try {
-        const books = await getAllBooks();
+        const books = await getAllBooks({
+            limit: amount ? amount : null,
+            offset: page ? (page - 1) * amount : null
+        });
         return res.status(StatusCodes.OK).json(books);
     } catch (error) {
-        return res.status(error.statusCode).json({
-            message: error.message
-        });
+        next(error);
     }
 };
 
-const fetchBookById = async (req, res) => {
+const fetchBookById = async (req, res, next) => {
     let { id } = req.params;
-    id = parseInt(id);
 
     try {
         const book = await getBookById(id);
         return res.status(StatusCodes.OK).json(book);
     } catch (error) {
-        const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
-        return res.status(statusCode).json({
-            message: error.message || 'Internal server error'
-        });
+        next(error);
     }
 };
 

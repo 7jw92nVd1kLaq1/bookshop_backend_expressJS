@@ -4,28 +4,35 @@ const { getBooksByCategory } = require('../services/books-service');
 const { getAllCategories } = require('../services/categories-service');
 
 
-const fetchAllCategories = async (req, res) => {
+const fetchAllCategories = async (req, res, next) => {
     try {
         const categories = await getAllCategories();
         return res.status(StatusCodes.OK).json(categories);
     } catch (error) {
-        return res.status(error.statusCode).json({
-            message: error.message
-        });
+        next(error);
     }
 };
 
-const fetchBooksByCategory = async (req, res) => {
+const fetchBooksByCategory = async (req, res, next) => {
     const { id } = req.params;
+    const { page, amount } = req.query;
 
     try {
-        const books = await getBooksByCategory(id);
+        const books = await getBooksByCategory(
+            id, 
+            {
+                joins: [
+                    {
+                        table: 'categories',
+                        on: 'categories.id = books.categories_id'
+                    }
+                ],
+                limit: amount
+            }
+        );
         return res.status(StatusCodes.OK).json(books);
     } catch (error) {
-        const statusCode = error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
-        return res.status(statusCode).json({
-            message: error.message || 'Internal server error'
-        });
+        next(error);
     }
 };
 

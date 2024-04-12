@@ -2,6 +2,8 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 
 const { port } = require('./config');
+const throwError = require('./middlewares/error-middleware');
+
 const booksRouter = require('./routes/books');
 const usersRouter = require('./routes/users');
 const publishersRouter = require('./routes/publishers');
@@ -22,6 +24,8 @@ app.use('/', authenticationRouter);
 app.use('/categories', categoriesRouter);
 app.use('/authors', authorsRouter);
 app.use('/carts', cartsRouter);
+
+app.use(throwError);
 
 app.listen(port, () => {
     console.log('Server is running on port 3000');
