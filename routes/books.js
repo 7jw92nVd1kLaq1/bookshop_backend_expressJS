@@ -2,42 +2,54 @@ const express = require('express');
 const router = express.Router();
 const { param, query } = require('express-validator');
 
-const { 
+const {
+    addBooks,
+    likeBook,
+    unlikeBook,
     fetchAllBooks,
-    fetchBookById
+    fetchBooksLikes,
+    fetchBookById,
+    fetchBooksByRecent
 } = require('../controllers/books-controller');
+const { 
+    adminOnly,
+    allowAccessToEveryone,
+    allowAccessToLoggedInUser
+} = require('../middlewares/auth-middleware');
 const { validate } = require('../middlewares/validate-middleware');
 
-router.post('/', (req, res) => {
-    const {
-        title,
-        description,
-        authorId,
-        categoryId,
-        ISBN,
-        publicationDate,
-        publisherId,
-        price,
-        currency,
-        pages,
-        format,
-        edition,
-        language,
-    } = req.body;
-    res.send(`Book created: title=${title}, description=${description}, authorId=${authorId}, categoryId=${categoryId}, ISBN=${ISBN}, publicationDate=${publicationDate}, publisher=${publisher}, price=${price}, currency=${currency}, pages=${pages}, format=${format}, edition=${edition}, language=${language}`);
-});
+router.post(
+    '/', 
+    //adminOnly,
+    addBooks
+);
 
 router.get(
     '/', 
     [
+        allowAccessToEveryone,
         query('page').optional().isInt().toInt(),
         query('amount').optional().isInt().toInt(),
     ],
     fetchAllBooks
 );
+
+router.get(
+    '/recent', 
+    [
+        allowAccessToEveryone,
+        query('page').optional().isInt().toInt(),
+        query('amount').optional().isInt().toInt(),
+        query('months').optional().isInt().toInt(),
+        query('days').optional().isInt().toInt(),
+    ],
+    fetchBooksByRecent
+);
+
 router.get(
     '/:id', 
     [
+        allowAccessToEveryone,
         param('id').isInt().toInt(),
         validate
     ],
@@ -69,20 +81,33 @@ router.put('/:id', (req, res) => {
     res.send(`Book updated: id=${id}, title=${title}, description=${description}, authorId=${authorId}, categoryId=${categoryId}, ISBN=${ISBN}, publicationDate=${publicationDate}, publisher=${publisher}, price=${price}, currency=${currency}, pages=${pages}, format=${format}, edition=${edition}, language=${language}`);
 });
 
-router.get('/:id/likes', (req, res) => {
-    const { id } = req.params;
-    res.send(`Book likes: id=${id}`);
-});
-
-router.post('/:id/likes', (req, res) => {
-    const { id } = req.params;
-    res.send(`Book like added: id=${id}`);
-}); 
-
-router.delete('/:id/likes', (req, res) => {
-    const { id } = req.params;
-    res.send(`Book like deleted: id=${id}`);
-});
+router.get(
+    '/:id/likes', 
+    [
+        allowAccessToEveryone,
+        param('id').isInt().toInt(),
+        validate
+    ],
+    fetchBooksLikes
+);
+router.post(
+    '/:id/likes', 
+    [
+        allowAccessToLoggedInUser,
+        param('id').isInt().toInt(),
+        validate
+    ],
+    likeBook
+); 
+router.delete(
+    '/:id/likes', 
+    [
+        allowAccessToLoggedInUser,
+        param('id').isInt().toInt(),
+        validate
+    ],
+    unlikeBook
+);
 
 router.get('/:id/reviews', (req, res) => {
     const { keywords, sortBy, sortOrder, page, amount } = req.query;

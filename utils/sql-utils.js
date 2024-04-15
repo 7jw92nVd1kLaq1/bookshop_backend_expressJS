@@ -4,13 +4,19 @@ const { promisePool } = require('../db');
 
 
 class Validator {
-    static validate() {
+    constructor() {
+        if (this.constructor === Validator) {
+            throw new Error('Cannot instantiate an abstract class.');
+        }
+    }
+
+    validate() {
         throw new Error('validate method must be implemented.');
     }
 }
 
 class SQLKeywordsValidator extends Validator {
-    static mysqlKeywords = [
+    mysqlKeywords = [
         "ACCESSIBLE", "ADD", "ALL", "ALTER", "ANALYZE", "AND", "AS", "ASC", "ASENSITIVE", "BEFORE",
         "BETWEEN", "BIGINT", "BINARY", "BLOB", "BOTH", "BY", "CALL", "CASCADE", "CASE", "CHANGE",
         "CHAR", "CHARACTER", "CHECK", "COLLATE", "COLUMN", "CONDITION", "CONSTRAINT", "CONTINUE",
@@ -43,8 +49,15 @@ class SQLKeywordsValidator extends Validator {
         "VARCHAR", "VARCHARACTER", "VARYING", "VIRTUAL", "WHEN", "WHERE", "WHILE", "WINDOW", "WITH",
         "WRITE", "XOR", "YEAR_MONTH", "ZEROFILL"
     ];
+    exclude = [];
 
-    static validate(input, exclude = []) {
+    constructor(exclude = []) {
+        super();
+        this.exclude = exclude;
+    }
+
+
+    validate(input, exclude = []) {
         if (typeof input !== 'string') return false;
         if (!input.trim()) return false;
 
@@ -64,7 +77,6 @@ class SQLKeywordsValidator extends Validator {
     }
 }
 
-
 class Query {
     constructor() {
         if (this.constructor === Query) {
@@ -76,23 +88,121 @@ class Query {
     }
 }
 
-class SelectQuery extends Query {
+class InsertQuery extends Query {
+    #count;
+    #query;
+
     constructor(queryString) {
         super();
         if (typeof queryString !== 'string') {
             throw new Error('Query must be a string.');
         }
 
-        this.query = queryString;
+        this.#query = queryString;
+        this.#count = queryString.split('?').length - 1;
+    }
+
+    setQueryString(queryString) {
+        this.#query = queryString;
+        this.#count = queryString.split('?').length - 1;
+    }
+
+    getQueryString() {
+        return this.#query;
+    }
+
+    async run(connection, args = []) {
+        if (!Array.isArray(args)) {
+            throw new Error('Arguments must be an array.');
+        }
+        if (args.length !== this.#count) {
+            throw new Error(`Number of arguments does not match the number of placeholders. It should have ${this.#count} arguments.`);
+        }
+
+        try {
+            const [result] = await connection.query(this.#query, args);
+            return result;
+        } catch (error) {
+            console.log(`DB error occurred in "InsertQuery.run": ${error.message}`);
+            throw new InternalServerError('Error occurred while inserting data. Please try again.');
+        }
+    }
+}
+
+class DeleteQuery extends Query {
+    #count;
+    #query;
+
+    constructor(queryString) {
+        super();
+        if (typeof queryString !== 'string') {
+            throw new Error('Query must be a string.');
+        }
+
+        this.#query = queryString;
+        this.#count = queryString.split('?').length - 1;
+    }
+
+    setQueryString(queryString) {
+        this.#query = queryString;
+        this.#count = queryString.split('?').length - 1;
+    }
+
+    getQueryString() {
+        return this.#query;
+    }
+
+    async run(connection, args = []) {
+        if (!Array.isArray(args)) {
+            throw new Error('Arguments must be an array.');
+        }
+        if (args.length !== this.#count) {
+            throw new Error(`Number of arguments does not match the number of placeholders. It should have ${this.#count} arguments.`);
+        }
+
+        try {
+            const [result] = await connection.query(this.#query, args);
+            return result;
+        } catch (error) {
+            console.log(`DB error occurred in "DeleteQuery.run": ${error.message}`);
+            throw new InternalServerError('Error occurred while deleting data. Please try again.');
+        }
+    }
+}
+
+class SelectQuery extends Query {
+    #count;
+    #query;
+
+    constructor(queryString) {
+        super();
+        if (typeof queryString !== 'string') {
+            throw new Error('Query must be a string.');
+        }
+
+        this.#query = queryString;
+        this.#count = queryString.split('?').length - 1;
+    }
+
+    setQueryString(queryString) {
+        this.#query = queryString;
+        this.#count = queryString.split('?').length - 1;
+    }
+
+    getQueryString() {
+        return this.#query;
     }
 
     async run(args = []) {
         if (!Array.isArray(args)) {
             throw new Error('Arguments must be an array.');
         }
+        if (args.length !== this.#count) {
+            throw new Error(`Number of arguments does not match the number of placeholders. It should have ${this.#count} arguments.`);
+        }
 
         try {
-            const [rows] = await promisePool.query(this.query, args);
+            const [rows] = await promisePool.query(this.#query, args);
             return rows;
         } catch (error) {
             console.log(`DB error occurred in "SelectQuery.run": ${error.message}`);
@@ -102,8 +212,47 @@ class SelectQuery extends Query {
 }
 
 // Still in progress / Experimenting
-class SelectQueryBuilder {
+class QueryBuilder {
+    static checkBackticks(field, maxBackticks = 2, strictMode = false) {
+        const backticks = field.split('`');
+        const backticksCount = backticks.length - 1;
+
+        // Check if the count of backticks is an odd number
+        if (backticksCount % 2 !== 0) return false;
+        if (maxBackticks < 0) return false;
+
+        // Check if the count of backticks exceeds the maximum allowed
+        if (maxBackticks !== null && backticksCount > maxBackticks) return false;
+        if (backticksCount && strictMode) {
+            // Check if the first and last characters are backticks
+            if (backticks[0].length > 0 || backticks[backticksCount].length > 0) return false;
+            for (let i = 2; i < backticksCount - 1; i += 2) {
+                if (backticks[i].length > 0) return false;
+            }
+        }
+
+        return true;
+    }
+
     constructor() {
+        if (this.constructor === QueryBuilder) {
+            throw new Error('Cannot instantiate an abstract class.');
+        }
+    }
+
+    reset() {
+        throw new Error('reset method must be implemented.');
+    }
+
+    build() {
+        throw new Error('build method must be implemented.');
+    }
+}
+
+
+class InsertQueryBuilder extends QueryBuilder {
+    constructor() {
+        super();
         this.reset();
     }
 
@@ -111,6 +260,194 @@ class SelectQueryBuilder {
         if (typeof table !== 'string') return false;
         if (!table.trim()) return false;
         if (/[^a-zA-Z0-9_\.\`]/g.test(table)) return false;
+        if (super.checkBackticks(table, 2, true) === false) return false;
+
+        return true;
+    }
+
+    static isColumnNameValid(field) {
+        if (typeof field !== 'string') return false;
+        if (!field.trim()) return false;
+        if (/[^a-zA-Z0-9_\`]/g.test(field)) return false;
+        if (super.checkBackticks(field, 2, true) === false) return false;
+
+        return true;
+    }
+
+    reset() {
+        this.query = {
+            insert: [],
+            into: null,
+            values: [],
+        };
+    }
+
+    insert(fields) {
+        if (Array.isArray(fields) === false) {
+            throw new Error('Fields must be an array.');
+        } else if (fields.length === 0) {
+            throw new Error('Fields array cannot be empty.');
+        }
+
+        const isEveryColumnValid = fields.every(InsertQueryBuilder.isColumnNameValid);
+        if (isEveryColumnValid === false) {
+            throw new InvalidColumnError(`In insert: Invalid column name.`);
+        }
+
+        this.query.insert = fields;
+        return this;
+    }
+
+    into(table) {
+        if (typeof table !== 'string') {
+            throw new Error('Table name must be a string.');
+        }
+        if (InsertQueryBuilder.isTableNameValid(table) === false) {
+            throw new Error('Invalid table name.');
+        }
+
+        this.query.into = table;
+        return this;
+    }
+
+    values(values = []) {
+        if (Array.isArray(values) === false) {
+            throw new Error('Values must be an array.');
+        } else if (values.length === 0) {
+            throw new Error('Values array cannot be empty.');
+        }
+
+        const isArrayforArray = values.every(v => Array.isArray(v));
+        if (isArrayforArray === false) {
+            throw new Error('Values must be an array of arrays.');
+        }
+
+        this.query.values = values;
+        return this;
+    }
+
+    build() {
+        if (this.query.into === null) {
+            throw new Error('Table name is required.');
+        }
+
+        if (this.query.values.length === 0) {
+            throw new Error('Values are required.');
+        } else {
+            for (let i = 0; i < this.query.values.length; i++) {
+                const values = this.query.values[i];
+                if (values.length === 0) {
+                    throw new Error('Values array cannot be empty.');
+                }
+                const isEveryValueValid = values.every(v => typeof v === 'string');
+                if (isEveryValueValid === false) {
+                    throw new Error('Values must be an array of strings.');
+                }
+            }
+        }
+
+        if (this.query.insert.length > 0) {
+            const valuesProvided = this.query.values.every(v => v.length === this.query.insert.length);
+            if (valuesProvided === false) {
+                throw new Error('Number of values does not match the number of columns.');
+            }
+        }
+
+        let queryString = `INSERT INTO ${this.query.into}`;
+        if (this.query.insert.length > 0) {
+            queryString += ` (${this.query.insert.join(', ')})`;
+        }
+        queryString += ' VALUES ';
+        queryString += this.query.values.map(v => `(${v.join(', ')})`).join(', ');
+
+        return new InsertQuery(queryString);
+    }
+}
+
+class DeleteQueryBuilder extends QueryBuilder {
+    constructor() {
+        super();
+        this.reset();
+    }
+
+    static isTableNameValid(table) {
+        if (typeof table !== 'string') return false;
+        if (!table.trim()) return false;
+        if (/[^a-zA-Z0-9_\.\`]/g.test(table)) return false;
+        if (super.checkBackticks(table, 2, true) === false) return false;
+
+        return true;
+    }
+
+    static isConditionValid(field) {
+        if (typeof field !== 'string') return false;
+        if (!field.trim()) return false;
+        if (/[^a-zA-Z0-9_\`\?\s\'\"\=]/g.test(field)) return false;
+        if (super.checkBackticks(field) === false) return false;
+
+        return true;
+    }
+
+    reset() {
+        this.query = {
+            from: null,
+            where: [],
+        };
+    }
+
+    from(table) {
+        if (typeof table !== 'string') {
+            throw new Error('Table name must be a string.');
+        }
+        if (DeleteQueryBuilder.isTableNameValid(table) === false) {
+            throw new Error('Invalid table name.');
+        }
+
+        this.query.from = table;
+        return this;
+    }
+
+    where(condition) {
+        if (typeof condition !== 'string') {
+            throw new Error('Condition must be a string.');
+        }
+        if (!condition.trim()) {
+            throw new Error('Condition cannot be empty.');
+        }
+        if (DeleteQueryBuilder.isConditionValid(condition) === false) {
+            throw new Error('Invalid condition.');
+        }
+
+        condition = `(${condition})`;
+        this.query.where.push(condition);
+        return this;
+    }
+
+    build() {
+        if (this.query.from === null) {
+            throw new Error('Table name is required.');
+        }
+
+        let queryString = `DELETE FROM ${this.query.from}`;
+        if (this.query.where.length) {
+            queryString += ` WHERE ${this.query.where.join(' AND ')}`;
+        }
+
+        return new DeleteQuery(queryString);
+    }
+}
+
+class SelectQueryBuilder extends QueryBuilder {
+    constructor() {
+        super();
+        this.reset();
+    }
+
+    static isTableNameValid(table) {
+        if (typeof table !== 'string') return false;
+        if (!table.trim()) return false;
+        if (/[^a-zA-Z0-9_\.\`]/g.test(table)) return false;
+        if (super.checkBackticks(table) === false) return false;
 
         return true;
     }
@@ -119,6 +456,7 @@ class SelectQueryBuilder {
         if (typeof condition !== 'string') return false;
         if (!condition.trim()) return false;
         if (/[^a-zA-Z0-9_\s\=\.\`]/.test(condition)) return false;
+        if (super.checkBackticks(condition) === false) return false;
 
         return true;
     }
@@ -127,6 +465,7 @@ class SelectQueryBuilder {
         if (typeof field !== 'string') return false;
         if (!field.trim()) return false;
         if (/[^a-zA-Z0-9_\s\(\)\.\`\*]/g.test(field)) return false;
+        if (super.checkBackticks(field, null) === false) return false;
 
         return true;
     }
@@ -146,16 +485,16 @@ class SelectQueryBuilder {
     }
 
     select(fields = ['*']) {
-        if (!Array.isArray(fields)) {
+        if (Array.isArray(fields) === false) {
             throw new Error('Fields must be an array.');
         } else if (fields.length === 0) {
             throw new Error('Fields array cannot be empty.');
         }
 
-        const isEveryColumnValid = fields.every(SelectQueryBuilder.isColumnNameValid);
-        if (isEveryColumnValid === false) {
-            throw new InvalidColumnError(`In select: Invalid column name.`);
-        }
+        // const isEveryColumnValid = fields.every(SelectQueryBuilder.isColumnNameValid);
+        // if (isEveryColumnValid === false) {
+        //     throw new InvalidColumnError(`In select: Invalid column name.`);
+        // }
 
         this.query.select = fields;
         return this;
@@ -165,7 +504,7 @@ class SelectQueryBuilder {
         if (typeof table !== 'string') {
             throw new Error('Table name must be a string.');
         }
-        if (!SelectQueryBuilder.isTableNameValid(table)) {
+        if (SelectQueryBuilder.isTableNameValid(table) === false) {
             throw new Error('Invalid table name.');
         }
 
@@ -173,26 +512,31 @@ class SelectQueryBuilder {
         return this;
     }
 
-    join(table, on) {
+    join(table, on, type = 'INNER') {
+        // Check if table and on are strings
         if (
             typeof table !== 'string' || 
             typeof on !== 'string'
         ) {
             throw new Error('Invalid join condition.');
         }
-        if (!SelectQueryBuilder.isTableNameValid(table)) {
+        if (SelectQueryBuilder.isTableNameValid(table) === false) {
             throw new Error('Invalid table name.');
         }
-        if (!SelectQueryBuilder.isJoinConditionValid(on)) {
+        if (SelectQueryBuilder.isJoinConditionValid(on) === false) {
             throw new Error('Invalid join condition.');
         }
+        if (type !== 'INNER' && type !== 'LEFT' && type !== 'RIGHT') {
+            throw new Error('Invalid join type.');
+        }
 
+        // Check if on is in the format of 'table1.column1 = table2.column2'
         const splitOn = on.split('=');
         if (splitOn.length !== 2) {
             throw new Error('Invalid join condition.');
         }
 
-        this.query.join.push({ table, on });
+        this.query.join.push({ table, on, type });
         return this;
     }
 
@@ -213,6 +557,7 @@ class SelectQueryBuilder {
         if (!SelectQueryBuilder.isColumnNameValid(field)) {
             throw new InvalidColumnError(`In orderBy: ${field} is not a valid column name.`);
         }
+        // Check if direction is either ASC or DESC
         if (direction !== 'ASC' && direction !== 'DESC') {
             throw new Error('Invalid direction. It should be either ASC or DESC.');
         }
@@ -222,7 +567,7 @@ class SelectQueryBuilder {
     }
 
     groupBy(field) {
-        if (!SelectQueryBuilder.isColumnNameValid(field)) {
+        if (SelectQueryBuilder.isColumnNameValid(field) === false) {
             throw new InvalidColumnError(`In groupBy: ${field} is not a valid column name.`);
         }
 
@@ -271,15 +616,21 @@ class SelectQueryBuilder {
 
         if (this.query.join.length) {
             this.query.join.forEach(j => {
+                if (j.type) queryString += ` ${j.type}`;
                 queryString += ` JOIN ${j.table} ON ${j.on}`;
             });
         }
 
+        if (this.query.where.length) {
+            queryString += ` WHERE ${this.query.where.join(' AND ')}`;
+        }
+
         if (this.query.groupBy.length) {
             queryString += ` GROUP BY ${this.query.groupBy.join(', ')}`;
+        } 
+
+        if (this.query.having.length) {
             queryString += ` HAVING ${this.query.having.join(' AND ')}`;
-        } else if (this.query.where.length) {
-            queryString += ` WHERE ${this.query.where.join(' AND ')}`;
         }
 
         if (this.query.orderBy.length) {
@@ -314,18 +665,37 @@ const stringifyColumns = (columns = []) => {
     return columns.length ? columns.join(', ') : '*';
 };
 
-// const builder = new SelectQueryBuilder();
-// const query = builder
+// const selectBuilder = new SelectQueryBuilder();
+// const selectQuery = selectBuilder
 //     .select(['id', 'name', 'email'])
 //     .from('users')
 //     .where(`email = 'email@email.com'`)
 //     .orderBy('name', 'ASC')
 //     .limit(10)
 //     .build();
+// console.log(selectQuery.getQueryString());
 
-// console.log(query); SELECT id, name, email FROM users WHERE email = 'email' ORDER BY name ASC LIMIT 10
+// const builder = new InsertQueryBuilder();
+// const query = builder
+//     .insert(['name', 'email'])
+//     .into('users')
+//     .values([
+//         ['?', '?'],
+//         ['?', '?'],
+//         ['?', '?'],
+//     ])
+//     .build();
+
+// const builder = new DeleteQueryBuilder();
+// const query = builder
+//     .from('users')
+//     .where('id = ?')
+//     .build();
+// console.log(query.getQueryString());
 
 module.exports = {
+    InsertQueryBuilder,
+    DeleteQueryBuilder,
     SelectQueryBuilder,
     SQLKeywordsValidator,
     stringifyColumns
