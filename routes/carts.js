@@ -1,57 +1,110 @@
 const express = require('express');
 const router = express.Router();
+const { param, query, body } = require('express-validator');
 
-router.post('/', (req, res) => {
-    const { name, description } = req.body;
-    res.send(`Cart created: name=${name}, description=${description}`);
-});
+const { validate } = require('../middlewares/validate-middleware');
+const { 
+    adminOnly,
+    allowAccessToLoggedInUser
+} = require('../middlewares/auth-middleware');
+const {
+    addCart,
+    addCartItem,
+    deleteCartItem,
+    editCartItem,
+    fetchAllCarts,
+    fetchCart,
+    fetchSelectedItemsFromCart
+} = require('../controllers/carts-controller');
 
-router.get('/', (req, res) => {
-    const { keywords, sortBy, sortOrder, page, amount } = req.query;
-    res.send(`Carts: sortBy=${sortBy}, sortOrder=${sortOrder}, page=${page}, amount=${amount}`);
-});
 
-router.get('/:id', (req, res) => {
-    const { id } = req.params;
-    res.send(`Cart: id=${id}`);
-});
+router.post(
+    '/',
+    [
+        allowAccessToLoggedInUser,
+        body('name').isString().notEmpty(),
+        body('description').isString().notEmpty(),
+        validate
+    ],
+    addCart
+);
+router.get(
+    '/', 
+    adminOnly,
+    fetchAllCarts
+);
 
-router.delete('/:id', (req, res) => {
-    const { id } = req.params;
-    res.send(`Cart deleted: id=${id}`);
-});
+router.get(
+    '/:cartsId', 
+    [
+        allowAccessToLoggedInUser,
+        param('cartsId').isInt().toInt(),
+        validate
+    ],
+    fetchCart
+);
+router.delete(
+    '/:id', 
+    allowAccessToLoggedInUser,
+    (req, res) => {
+        const { id } = req.params;
+        res.send(`Cart deleted: id=${id}`);
+    }
+);
+router.put(
+    '/:id', 
+    allowAccessToLoggedInUser,
+    (req, res) => {
+        const { id } = req.params;
+        const { name, description } = req.body;
+        res.send(`Cart updated: id=${id}, name=${name}, description=${description}`);
+    }
+);
 
-router.put('/:id', (req, res) => {
-    const { id } = req.params;
-    const { name, description } = req.body;
-    res.send(`Cart updated: id=${id}, name=${name}, description=${description}`);
-});
+router.post(
+    '/:cartsId/items',
+    [
+        allowAccessToLoggedInUser,
+        param('cartsId').isInt().toInt(),
+        body('booksId').isInt().toInt(),
+        body('quantity').isInt().toInt(),
+        validate
+    ],
+    addCartItem
+);
 
-router.get('/:id/items', (req, res) => {
-    const { id } = req.params;
-    res.send(`Cart items: id=${id}`);
-});
+router.delete(
+    '/:cartsId/items/:itemsId', 
+    [
+        allowAccessToLoggedInUser,
+        param('booksId').isInt().toInt(),
+        param('cartsId').isInt().toInt(),
+        validate
+    ],
+    deleteCartItem
+);
 
-router.post('/:id/items', (req, res) => {
-    const { id } = req.params;
-    const { itemId, quantity } = req.body;
-    res.send(`Cart item added: id=${id}, itemId=${itemId}, quantity=${quantity}`);
-});
+router.put(
+    '/:cartsId/items/:booksId', 
+    [
+        allowAccessToLoggedInUser,
+        param('booksId').isInt().toInt(),
+        param('cartsId').isInt().toInt(),
+        body('quantity').isInt().toInt(),
+        validate
+    ],
+    editCartItem
+);
 
-router.delete('/:id/items/:itemId', (req, res) => {
-    const { id, itemId } = req.params;
-    res.send(`Cart item deleted: id=${id}, itemId=${itemId}`);
-});
-
-router.get('/:id/items/:itemId', (req, res) => {
-    const { id, itemId } = req.params;
-    res.send(`Cart item: id=${id}, itemId=${itemId}`);
-});
-
-router.put('/:id/items/:itemId', (req, res) => {
-    const { id, itemId } = req.params;
-    const { quantity } = req.body;
-    res.send(`Cart item updated: id=${id}, itemId=${itemId}, quantity=${quantity}`)
-});
+router.get(
+    '/:cartsId/items',
+    [
+        allowAccessToLoggedInUser,
+        param('cartsId').isInt().toInt(),
+        body('booksIds').isArray().toInt(),
+        validate
+    ],
+    fetchSelectedItemsFromCart
+)
 
 module.exports = router;

@@ -8,6 +8,10 @@ const {
     getAllBooks,
     getBookById,
 } = require('../services/books-service');
+const {
+    BooksNotFoundError
+} = require('../exceptions/books-exceptions');
+const { InternalServerError } = require('../exceptions/generic-exceptions');
 
 
 const addBooks = async (req, res, next) => {
@@ -53,12 +57,16 @@ const fetchAllBooks = async (req, res, next) => {
         groupBy: ['books.id']
     };
 
+    // Add liked column if user is logged in
     if (user && user.sub) {
         queryOptions.columns.push(`IF(books_likes.users_id = ${user.sub}, TRUE, FALSE) as liked`);
     }
 
     try {
         const books = await getAllBooks(queryOptions);
+        if (books.length === 0)
+            throw new BooksNotFoundError();
+
         return res.status(StatusCodes.OK).json(books);
     } catch (error) {
         next(error);
@@ -84,12 +92,16 @@ const fetchBookById = async (req, res, next) => {
         groupBy: ['books.id']
     };
 
+    // Add liked column if user is logged in
     if (user && user.sub) {
         queryOptions.columns.push(`IF(books_likes.users_id = ${user.sub}, TRUE, FALSE) as liked`);
     }
 
     try {
         const book = await getBookById(id, queryOptions);
+        if (book === null)
+            throw new BooksNotFoundError();
+
         return res.status(StatusCodes.OK).json(book);
     } catch (error) {
         next(error);
@@ -126,12 +138,16 @@ const fetchBooksByRecent = async (req, res, next) => {
             groupBy: ['books.id'],
             orderBy: [{ column: 'pub_date', order: 'DESC' }]
         };
-
+        
+        // Add liked column if user is logged in
         if (user && user.sub) {
             queryOptions.columns.push(`IF(books_likes.users_id = ${user.sub}, TRUE, FALSE) as liked`);
         }
 
         const books = await getAllBooks(queryOptions);
+        if (books.length === 0)
+            throw new BooksNotFoundError();
+
         return res.status(StatusCodes.OK).json(books);
     } catch (error) {
         next(error);
@@ -146,8 +162,14 @@ const likeBook = async (req, res, next) => {
     await connection.beginTransaction();
 
     try {
-        await getBookById(id, { columns: ['id']});
-        await createBooksLike(connection, id, user.sub);
+        const book = await getBookById(id, { columns: ['id']});
+        if (book === null) {
+            throw new BooksNotFoundError();
+        }
+        const isLikeAdded = await createBooksLike(connection, id, user.sub);
+        if (isLikeAdded === null) {
+            throw new InternalServerError();
+        }
 
         await connection.commit();
         return res.status(StatusCodes.OK).end();
@@ -167,8 +189,14 @@ const unlikeBook = async (req, res, next) => {
     await connection.beginTransaction();
 
     try {
-        await getBookById(id, { columns: ['id'], joins: []});
-        await deleteBooksLike(connection, id, user.sub);
+        const book = await getBookById(id, { columns: ['id']});
+        if (book === null) {
+            throw new BooksNotFoundError();
+        }
+        const isLikeDeleted = await deleteBooksLike(connection, id, user.sub);
+        if (isLikeDeleted === false) {
+            throw new InternalServerError();
+        }
 
         await connection.commit();
         return res.status(StatusCodes.OK).end();

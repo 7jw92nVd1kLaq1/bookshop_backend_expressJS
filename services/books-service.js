@@ -37,18 +37,18 @@ const sanitizeBook = (book) => {
 };
 
 
-const getAllBooks = async (
-    {
-        columns = ['*'], 
-        wheres = [], 
-        joins = [], 
-        offset = null, 
+const getAllBooks = async (options = {}, values = []) => {
+    const {
+        columns = ['*'],
+        wheres = [],
+        joins = [],
+        offset = null,
         limit = null,
         orderBy = [],
         groupBy = [],
         having = []
-    }
-) => {
+    } = options;
+
     const builder = new SelectQueryBuilder();
     builder.select(columns).from('books');
     if (limit) builder.limit(limit);
@@ -63,29 +63,36 @@ const getAllBooks = async (
 
     const query = builder.build();
     console.log(query.getQueryString());
-    const books = await query.run();
+    const books = await query.run(values);
 
     if (!books.length) {
-        throw new BooksNotFoundError();
+        return [];
     }
 
     return books;
 };
 
-const getBookById = async (id, options = {columns: ['*'], joins: [], groupBy: [], having: []}) => {
+const getBookById = async (id, options = {}) => {
+    const {
+        columns = ['*'],
+        joins = [],
+        groupBy = [],
+        having = []
+    } = options;
+
     const builder = new SelectQueryBuilder();
-    builder.select(options.columns).from('books').where('books.id = ?');
-    if (options.joins) 
-        options.joins.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
-    if (options.groupBy) options.groupBy.forEach(g => builder.groupBy(g));
-    if (options.having) options.having.forEach(h => builder.having(h));
+    builder.select(columns).from('books').where('books.id = ?');
+    if (joins) 
+        joins.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
+    if (groupBy) groupBy.forEach(g => builder.groupBy(g));
+    if (having) having.forEach(h => builder.having(h));
 
     const query = builder.build();
     const books = await query.run([id]);
     const book = books[0];
 
     if (!book) {
-        throw new BooksNotFoundError();
+        return null;
     }
 
     return book;
@@ -93,14 +100,20 @@ const getBookById = async (id, options = {columns: ['*'], joins: [], groupBy: []
 
 const getBooksByAuthor = async (
     authors_id, 
-    options = {columns: ['*'], joins: [], limit: null}
+    options = {}
 ) => {
+    const {
+        columns = ['*'],
+        joins = [],
+        limit = null
+    } = options;
+
     const builder = new SelectQueryBuilder();
-    builder.select(options.columns).from('books').where(`authors_id = ?`);
-    if (options.limit) 
-        builder.limit(options.limit);
-    if (options.joins) 
-        options.joins.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
+    builder.select(columns).from('books').where(`authors_id = ?`);
+    if (limit) 
+        builder.limit(limit);
+    if (joins) 
+        joins.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
 
     const query = builder.build();
     const books = await query.run([authors_id]);
@@ -114,14 +127,21 @@ const getBooksByAuthor = async (
 
 const getBooksByCategory = async (
     categories_id, 
-    options = {columns: ['*'], joins: [], limit: null, offset: null}
+    options = {}
 ) => {
+    const { 
+        columns = ['*'],
+        joins = [],
+        limit = null,
+        offset = null
+    } = options;
+
     const builder = new SelectQueryBuilder();
-    builder.select(options.columns).from('books').where('`categories_id` = ?');
-    if (options.limit) builder.limit(options.limit);
-    if (options.offset) builder.offset(options.offset);
-    if (options.joins) 
-        options.joins.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
+    builder.select(columns).from('books').where('`categories_id` = ?');
+    if (limit) builder.limit(limit);
+    if (offset) builder.offset(offset);
+    if (joins) 
+        joins.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
 
     const query = builder.build();
     const books = await query.run([categories_id]);
@@ -133,11 +153,19 @@ const getBooksByCategory = async (
     throw new BooksNotFoundError();
 };
 
-const getBooksReleasedInTheLastMonth = async ({columns = ['*'], joins = [], limit = null}) => {
+const getBooksReleasedInTheLastMonth = async (options = {}) => {
+    const {
+        columns = ['*'],
+        joins = [],
+        offset = null,
+        limit = null
+    } = options;
+
     const builder = new SelectQueryBuilder();
     builder.select(columns).from('books')
     builder.where('created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)');
     if (limit) builder.limit(limit);
+    if (offset) builder.offset(offset);
     joins.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
 
     const query = builder.build();
@@ -210,7 +238,7 @@ const createBooksLike = async (connection, books_id, users_id) => {
     const result = await query.run(connection, [books_id, users_id]);
 
     if (result.affectedRows === 0) {
-        throw new InternalServerError('Books like was not created. Please try again.');
+        return false;
     }
 
     return true;
@@ -233,10 +261,10 @@ const deleteBooksLike = async (connection, books_id, users_id) => {
     const result = await query.run(connection, [books_id, users_id]);
 
     if (result.affectedRows === 0) {
-        throw new InternalServerError('Books like was not deleted. Please try again.');
+        return false;
     }
 
-    return result;
+    return true;
 };
 
 module.exports = {
