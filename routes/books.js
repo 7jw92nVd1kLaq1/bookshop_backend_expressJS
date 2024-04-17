@@ -44,6 +44,15 @@ router.get(
     ],
     fetchBooksByRecent
 );
+router.get(
+    '/popular', 
+    [
+        allowAccessToEveryone,
+        query('page').optional().isInt().toInt(),
+        query('amount').optional().isInt().toInt(),
+    ],
+    fetchBooksByRecent
+);
 
 
 router.get(

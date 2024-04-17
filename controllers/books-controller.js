@@ -11,7 +11,6 @@ const {
 const {
     BooksNotFoundError
 } = require('../exceptions/books-exceptions');
-const { InternalServerError } = require('../exceptions/generic-exceptions');
 
 
 const addBooks = async (req, res, next) => {
@@ -154,6 +153,44 @@ const fetchBooksByRecent = async (req, res, next) => {
     }
 };
 
+const fetchBooksByPopular = async (req, res, next) => {
+    let { page, amount } = req.query;
+    const { user } = req;
+
+    try {
+        const queryOptions = {
+            columns: [
+                'books.*', 
+                'categories.name as categories_name',
+                'authors.name as authors_name',
+                'COUNT(books_likes.books_id) as likes',
+            ],
+            joins: [
+                {table: 'categories', on: 'books.categories_id = categories.id', type: 'LEFT'},
+                {table: 'authors', on: 'books.authors_id = authors.id', type: 'LEFT'},
+                {table: 'books_likes', on: 'books.id = books_likes.books_id', type: 'LEFT'},
+            ],
+            limit: amount ? amount : null,
+            offset: page ? (page - 1) * amount : null,
+            groupBy: ['books.id'],
+            orderBy: [{ column: 'likes', order: 'DESC' }]
+        };
+        
+        // Add liked column if user is logged in
+        if (user && user.sub) {
+            queryOptions.columns.push(`IF(books_likes.users_id = ${user.sub}, TRUE, FALSE) as liked`);
+        }
+
+        const books = await getAllBooks(queryOptions);
+        if (books.length === 0)
+            throw new BooksNotFoundError();
+
+        return res.status(StatusCodes.OK).json(books);
+    } catch (error) {
+        next(error);
+    }
+};
+
 const likeBook = async (req, res, next) => {
     const { id } = req.params;
     const { user } = req;
@@ -166,10 +203,7 @@ const likeBook = async (req, res, next) => {
         if (book === null) {
             throw new BooksNotFoundError();
         }
-        const isLikeAdded = await createBooksLike(connection, id, user.sub);
-        if (isLikeAdded === null) {
-            throw new InternalServerError();
-        }
+        await createBooksLike(connection, id, user.sub);
 
         await connection.commit();
         return res.status(StatusCodes.OK).end();
@@ -193,11 +227,7 @@ const unlikeBook = async (req, res, next) => {
         if (book === null) {
             throw new BooksNotFoundError();
         }
-        const isLikeDeleted = await deleteBooksLike(connection, id, user.sub);
-        if (isLikeDeleted === false) {
-            throw new InternalServerError();
-        }
-
+        await deleteBooksLike(connection, id, user.sub);
         await connection.commit();
         return res.status(StatusCodes.OK).end();
     } catch (error) {

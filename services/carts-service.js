@@ -10,10 +10,11 @@ const {
     InternalServerError
 } = require('../exceptions/generic-exceptions');
 
+
 const getAllCarts = async (options = {}, values = []) => {
     const {
-        columns = ['*'],
-        wheres = [],
+        select = ['*'],
+        where = [],
         joins = [],
         offset = null,
         limit = null,
@@ -23,13 +24,13 @@ const getAllCarts = async (options = {}, values = []) => {
     } = options;
 
     const builder = new SelectQueryBuilder();
-    builder.select(columns).from('carts');
+    builder.select(select).from('carts');
     if (limit) builder.limit(limit);
     if (offset) builder.offset(offset);
     joins.forEach(j => {
         builder.join(j.table, j.on, j.type ? j.type : 'INNER');
     });
-    wheres.forEach(w => builder.where(w));
+    where.forEach(w => builder.where(w));
     orderBy.forEach(o => builder.orderBy(o.column, o.order));
     groupBy.forEach(g => builder.groupBy(g));
     having.forEach(h => builder.having(h));
@@ -137,22 +138,25 @@ const addItemToCart = async (connection, carts_id, books_id, quantity = 1) => {
     return result.insertId;
 };
 
-const deleteItemFromCart = async (connection, carts_id, books_id) => {
+const deleteItemsFromCart = async (connection, carts_id, books_id) => {
     if (carts_id == null || books_id == null) {
         throw new BadRequestError('Cart ID and Items ID are required.');
+    }
+    if (Array.isArray(books_id) && books_id.length === 0) {
+        throw new BadRequestError('Books ID should be an array and not empty.');
     }
 
     const builder = new DeleteQueryBuilder();
     builder
         .from('carts_items')
         .where('carts_id = ?')
-        .where('books_id = ?');
+        .where('books_id IN (?)');
     
     const query = builder.build();
     const result = await query.run(connection, [carts_id, books_id]);
 
-    if (result.affectedRows === 0) {
-        return false;
+    if (result.affectedRows > books_id.length) {
+        throw new InternalServerError('Some items were not deleted. Please try again.');
     }
 
     return true;
@@ -190,6 +194,6 @@ module.exports = {
     deleteCart,
     editCart,
     addItemToCart,
-    deleteItemFromCart,
+    deleteItemsFromCart,
     editItemInCart
 };

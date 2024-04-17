@@ -11,6 +11,7 @@ const authenticationRouter = require('./routes/authentication');
 const categoriesRouter = require('./routes/categories');
 const authorsRouter = require('./routes/authors');
 const cartsRouter = require('./routes/carts');
+const ordersRouter = require('./routes/orders');
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use('/', authenticationRouter);
 app.use('/categories', categoriesRouter);
 app.use('/authors', authorsRouter);
 app.use('/carts', cartsRouter);
+app.use('/orders', ordersRouter);
 
 app.use(throwError);
 

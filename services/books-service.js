@@ -1,5 +1,5 @@
 const { BooksNotFoundError } = require('../exceptions/books-exceptions');
-const { BadRequestError } = require('../exceptions/generic-exceptions');
+const { BadRequestError, InternalServerError } = require('../exceptions/generic-exceptions');
 const { 
     InsertQueryBuilder,
     DeleteQueryBuilder,
@@ -238,7 +238,7 @@ const createBooksLike = async (connection, books_id, users_id) => {
     const result = await query.run(connection, [books_id, users_id]);
 
     if (result.affectedRows === 0) {
-        return false;
+        throw new InternalServerError('Books like was not created. Please try again.');
     }
 
     return true;
@@ -261,7 +261,7 @@ const deleteBooksLike = async (connection, books_id, users_id) => {
     const result = await query.run(connection, [books_id, users_id]);
 
     if (result.affectedRows === 0) {
-        return false;
+        throw new InternalServerError('Books like was not deleted. Please try again.');
     }
 
     return true;

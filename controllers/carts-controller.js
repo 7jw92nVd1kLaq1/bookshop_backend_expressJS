@@ -9,7 +9,7 @@ const {
     getAllCarts, 
     createCart,
     addItemToCart,
-    deleteItemFromCart,
+    deleteItemsFromCart,
     editItemInCart
 } = require('../services/carts-service');
 
@@ -30,12 +30,15 @@ const fetchCart = async (req, res, next) => {
     const { user } = req;
 
     const queryOptions = {
-        columns: [
-            'carts.*', 
-            'carts_items.books_id', 
+        select: [
+            'carts_items.books_id AS book_id', 
             'carts_items.amount', 
-            'books.title', 
-            'authors.name'
+            'books.title AS book_title', 
+            'authors.id AS author_id',
+            'authors.name AS author_name',
+            'categories.id AS category_id',
+            'categories.name AS category_name',
+            'prices.price'
         ],
         joins: [
             {
@@ -52,13 +55,24 @@ const fetchCart = async (req, res, next) => {
                 table: 'authors',
                 on: 'books.authors_id = authors.id',
                 type: 'LEFT'
+            },
+            {
+                table: 'categories',
+                on: 'books.categories_id = categories.id',
+                type: 'LEFT'
+            },
+            {
+                table: 'prices',
+                on: 'books.id = prices.books_id',
+                type: 'LEFT'
             }
         ],
-        wheres: [
+        where: [
             `carts.id = ${cartsId}`,
-            `carts.users_id = ${user.sub}`
+            `carts.users_id = ${user.sub}`,
+            'prices.created_at = (SELECT MAX(created_at) FROM prices p WHERE p.books_id = books.id)'
         ],
-    }
+    };
 
     try {
         const carts = await getAllCarts(queryOptions);
@@ -66,7 +80,7 @@ const fetchCart = async (req, res, next) => {
             throw new NotFoundError('Cart not found.');
         }
 
-        return res.status(StatusCodes.OK).json(carts[0]);
+        return res.status(StatusCodes.OK).json(carts);
     }
     catch (error) {
         next(error);
@@ -92,33 +106,48 @@ const fetchSelectedItemsFromCart = async (req, res, next) => {
     }
     
     const queryOptions = {
-        columns: [
+        select: [
             'carts_items.books_id', 
             'carts_items.amount', 
             'books.title', 
-            'authors.name'
+            'authors.name',
+            'authors.id',
+            'categories.name',
+            'categories.id',
+            'prices.price'
         ],
         joins: [
             {
                 table: 'carts_items',
                 on: 'carts.id = carts_items.carts_id',
-                type: 'INNER'
+                type: 'LEFT'
             },
             {
                 table: 'books',
                 on: 'carts_items.books_id = books.id',
-                type: 'INNER'
+                type: 'LEFT'
             },
             {
                 table: 'authors',
                 on: 'books.authors_id = authors.id',
-                type: 'INNER'
+                type: 'LEFT'
+            },
+            {
+                table: 'categories',
+                on: 'books.categories_id = categories.id',
+                type: 'LEFT'
+            },
+            {
+                table: 'prices',
+                on: 'books.id = prices.books_id',
+                type: 'LEFT'
             }
         ],
-        wheres: [
+        where: [
             `carts.id = ${cartsId}`,
             `carts.users_id = ${user.sub}`,
-            `carts_items.books_id IN (${booksIds.join(',')})`
+            `carts_items.books_id IN (${booksIds.join(',')})`,
+            'prices.created_at = (SELECT MAX(created_at) FROM prices p WHERE p.books_id = books.id)'
         ],
     };
 
@@ -166,8 +195,8 @@ const addCartItem = async (req, res, next) => {
     let cart;
     try {
         const carts = await getAllCarts({
-            columns: ['id'],
-            wheres: [`users_id = ${user.sub}`, `id = ${cartsId}`],
+            select: ['id'],
+            where: [`users_id = ${user.sub}`, `id = ${cartsId}`],
         });
         // Check if cart exists, if not create one
         if (carts.length === 0) {
@@ -203,18 +232,15 @@ const deleteCartItem = async (req, res, next) => {
 
     try {
         const carts = await getAllCarts({
-            columns: ['id'],
-            wheres: [`users_id = ${user.sub}`, `id = ${cartsId}`],
+            select: ['id'],
+            where: [`users_id = ${user.sub}`, `id = ${cartsId}`],
         });
 
         if (carts.length === 0) {
             throw new NotFoundError('Cart not found.');
         }
 
-        const isItemDeleted = await deleteItemFromCart(connection, cartsId, booksId);
-        if (isItemDeleted === false) {
-            throw new NotFoundError('Item not found in cart.');
-        }
+        await deleteItemsFromCart(connection, cartsId, [booksId]);
         await connection.commit();
         return res.status(StatusCodes.OK).end();
     } catch (error) {
@@ -235,8 +261,8 @@ const editCartItem = async (req, res, next) => {
 
     try {
         const carts = await getAllCarts({
-            columns: ['id'],
-            wheres: [`users_id = ${user.sub}`, `id = ${cartsId}`],
+            select: ['id'],
+            where: [`users_id = ${user.sub}`, `id = ${cartsId}`],
         });
 
         if (carts.length === 0) {

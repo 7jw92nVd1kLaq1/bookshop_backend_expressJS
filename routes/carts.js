@@ -44,22 +44,23 @@ router.get(
     fetchCart
 );
 router.delete(
-    '/:id', 
+    '/:cartsId', 
     allowAccessToLoggedInUser,
     (req, res) => {
-        const { id } = req.params;
-        res.send(`Cart deleted: id=${id}`);
+        const { cartsId } = req.params;
+        res.send(`Cart deleted: id=${cartsId}`);
     }
 );
 router.put(
-    '/:id', 
+    '/:cartsId', 
     allowAccessToLoggedInUser,
     (req, res) => {
-        const { id } = req.params;
+        const { cartsId } = req.params;
         const { name, description } = req.body;
-        res.send(`Cart updated: id=${id}, name=${name}, description=${description}`);
+        res.send(`Cart updated: id=${cartsId}, name=${name}, description=${description}`);
     }
 );
+
 
 router.post(
     '/:cartsId/items',
@@ -83,7 +84,6 @@ router.delete(
     ],
     deleteCartItem
 );
-
 router.put(
     '/:cartsId/items/:booksId', 
     [
@@ -95,7 +95,6 @@ router.put(
     ],
     editCartItem
 );
-
 router.get(
     '/:cartsId/items',
     [

@@ -211,44 +211,6 @@ class SelectQuery extends Query {
     }
 }
 
-// Still in progress / Experimenting
-class QueryBuilder {
-    static checkBackticks(field, maxBackticks = 2, strictMode = false) {
-        const backticks = field.split('`');
-        const backticksCount = backticks.length - 1;
-
-        // Check if the count of backticks is an odd number
-        if (backticksCount % 2 !== 0) return false;
-        if (maxBackticks < 0) return false;
-
-        // Check if the count of backticks exceeds the maximum allowed
-        if (maxBackticks !== null && backticksCount > maxBackticks) return false;
-        if (backticksCount && strictMode) {
-            // Check if the first and last characters are backticks
-            if (backticks[0].length > 0 || backticks[backticksCount].length > 0) return false;
-            for (let i = 2; i < backticksCount - 1; i += 2) {
-                if (backticks[i].length > 0) return false;
-            }
-        }
-
-        return true;
-    }
-
-    constructor() {
-        if (this.constructor === QueryBuilder) {
-            throw new Error('Cannot instantiate an abstract class.');
-        }
-    }
-
-    reset() {
-        throw new Error('reset method must be implemented.');
-    }
-
-    build() {
-        throw new Error('build method must be implemented.');
-    }
-}
-
 class UpdateQuery extends Query {
     #count;
     #query;
@@ -287,6 +249,44 @@ class UpdateQuery extends Query {
             console.log(`DB error occurred in "UpdateQuery.run": ${error.message}`);
             throw new InternalServerError('Error occurred while updating data. Please try again.');
         }
+    }
+}
+
+// Still in progress / Experimenting
+class QueryBuilder {
+    static checkBackticks(field, maxBackticks = 2, strictMode = false) {
+        const backticks = field.split('`');
+        const backticksCount = backticks.length - 1;
+
+        // Check if the count of backticks is an odd number
+        if (backticksCount % 2 !== 0) return false;
+        if (maxBackticks < 0) return false;
+
+        // Check if the count of backticks exceeds the maximum allowed
+        if (maxBackticks !== null && backticksCount > maxBackticks) return false;
+        if (backticksCount && strictMode) {
+            // Check if the first and last characters are backticks
+            if (backticks[0].length > 0 || backticks[backticksCount].length > 0) return false;
+            for (let i = 2; i < backticksCount - 1; i += 2) {
+                if (backticks[i].length > 0) return false;
+            }
+        }
+
+        return true;
+    }
+
+    constructor() {
+        if (this.constructor === QueryBuilder) {
+            throw new Error('Cannot instantiate an abstract class.');
+        }
+    }
+
+    reset() {
+        throw new Error('reset method must be implemented.');
+    }
+
+    build() {
+        throw new Error('build method must be implemented.');
     }
 }
 
@@ -455,9 +455,6 @@ class DeleteQueryBuilder extends QueryBuilder {
         if (!condition.trim()) {
             throw new Error('Condition cannot be empty.');
         }
-        if (DeleteQueryBuilder.isConditionValid(condition) === false) {
-            throw new Error('Invalid condition.');
-        }
 
         condition = `(${condition})`;
         this.query.where.push(condition);
@@ -482,15 +479,6 @@ class SelectQueryBuilder extends QueryBuilder {
     constructor() {
         super();
         this.reset();
-    }
-
-    static isTableNameValid(table) {
-        if (typeof table !== 'string') return false;
-        if (!table.trim()) return false;
-        if (/[^a-zA-Z0-9_\.\`]/g.test(table)) return false;
-        if (super.checkBackticks(table) === false) return false;
-
-        return true;
     }
 
     static isJoinConditionValid(condition) {
@@ -540,9 +528,6 @@ class SelectQueryBuilder extends QueryBuilder {
         if (typeof table !== 'string') {
             throw new Error('Table name must be a string.');
         }
-        if (SelectQueryBuilder.isTableNameValid(table) === false) {
-            throw new Error('Invalid table name.');
-        }
 
         this.query.from = table;
         return this;
@@ -555,9 +540,6 @@ class SelectQueryBuilder extends QueryBuilder {
             typeof on !== 'string'
         ) {
             throw new Error('Invalid join condition.');
-        }
-        if (SelectQueryBuilder.isTableNameValid(table) === false) {
-            throw new Error('Invalid table name.');
         }
         if (SelectQueryBuilder.isJoinConditionValid(on) === false) {
             throw new Error('Invalid join condition.');
@@ -590,9 +572,6 @@ class SelectQueryBuilder extends QueryBuilder {
     }
 
     orderBy(field, direction = 'ASC') {
-        if (!SelectQueryBuilder.isColumnNameValid(field)) {
-            throw new InvalidColumnError(`In orderBy: ${field} is not a valid column name.`);
-        }
         // Check if direction is either ASC or DESC
         if (direction !== 'ASC' && direction !== 'DESC') {
             throw new Error('Invalid direction. It should be either ASC or DESC.');
@@ -627,6 +606,9 @@ class SelectQueryBuilder extends QueryBuilder {
         if (typeof limit !== 'number') {
             throw new Error('Limit must be a number.');
         }
+        if (limit % 1 !== 0) {
+            throw new Error('Limit must be an integer.');
+        }
         if (limit < 1) {
             throw new Error('Limit must be greater than 0.');
         }
@@ -638,6 +620,9 @@ class SelectQueryBuilder extends QueryBuilder {
     offset(offset) {
         if (typeof offset !== 'number') {
             throw new Error('Offset must be a number.');
+        }
+        if (offset % 1 !== 0) {
+            throw new Error('Offset must be an integer.');
         }
         if (offset < 0) {
             throw new Error('Offset must be greater than or equal to 0.');
