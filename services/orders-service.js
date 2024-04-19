@@ -7,12 +7,36 @@ const {
 
 const {
     BadRequestError,
-    InternalServerError
+    InternalServerError,
+    NotFoundError
 } = require('../exceptions/generic-exceptions');
 
 const {
     getAllBooks
 } = require('./books-service');
+
+const checkAddressValidity = (address) => {
+    const validKeys = [
+        'recipient', 
+        'address1', 
+        'address2', 
+        'city', 
+        'state', 
+        'country', 
+        'postal_code', 
+        'phone_number'
+    ];
+
+    const addressKeys = Object.keys(address);
+    for (let key of addressKeys) {
+        if (validKeys.indexOf(key) === -1) {
+            delete address[key];
+        }
+    }
+
+    return address;
+};
+
 
 
 const getAllOrders = async (options = {}, values = []) => {
@@ -136,11 +160,11 @@ const createAddress = async (
     builder
         .insert(validKeys)  
         .into('addresses')
-        .values([['?', '?', '?', '?', '?', '?', '?', '?', '?']]);
+        .values(['?']);
 
     const query = builder.build();
 
-    const result = await query.run(connection, values);
+    const result = await query.run(connection, [values]);
     if (result.affectedRows === 0) {
         throw new InternalServerError('Address was not created. Please try again.');
     }
@@ -160,16 +184,20 @@ const createOrderItems = async (
     }
 
     const booksIds = items.map(item => item.books_id);
+    // Get the latest price for each book
     const latestPriceQueryOptions = {
         columns: [
             'id',
             '(SELECT id FROM prices WHERE books_id = books.id ORDER BY created_at DESC LIMIT 1) AS prices_id'
         ],
-        wheres: ['id IN (?)'],
-        orderBy: [{ column: 'created_at', order: 'DESC' }],
+        wheres: ['id IN (?)']
     };
     const latestPrices = await getAllBooks(latestPriceQueryOptions, [booksIds]);
+    if (latestPrices.length != booksIds.length) {
+        throw new InternalServerError('Some books you have requested do not have prices. Please contact the administrator.');
+    }
 
+    // Check if the items have the required fields
     const validKeys = ['orders_id', 'prices_id', 'amount'];
     const values = items.map(item => {
         const price = latestPrices.find(p => p.id === item.books_id);
@@ -180,19 +208,15 @@ const createOrderItems = async (
         throw new BadRequestError('Some fields are missing in the items. Please check again.');
     }
 
-    // [[1, 2, 3], [4, 5, 6], [7, 8, 9]] => [1, 2, 3, 4, 5, 6, 7, 8, 9]
-    const oneDimensionalValues = values.flat(); 
-
-    const placeholders = items.map(() => ['?', '?', '?']);
     const builder = new InsertQueryBuilder();
     builder
         .insert(validKeys)
         .into('orders_books')
-        .values(placeholders);
+        .values(['?']);
 
     const query = builder.build();
 
-    const result = await query.run(connection, oneDimensionalValues);
+    const result = await query.run(connection, values);
     if (result.affectedRows !== items.length) {
         throw new InternalServerError('Order items were not created. Please try again.');
     }
@@ -214,12 +238,13 @@ const createOrder = async (
     builder
         .insert(['users_id', 'addresses_id', 'statuses_id'])
         .into('orders')
-        .values([['?', '?', '?']]);
+        .values(['?']);
 
     const createOrderQuery = builder.build();
+    // 200 represents the pending status, which means the order is not yet processed
     const createOrderValues = [usersId, addressId, 200];
 
-    const createOrderResult = await createOrderQuery.run(connection, createOrderValues);
+    const createOrderResult = await createOrderQuery.run(connection, [createOrderValues]);
     if (createOrderResult.affectedRows === 0) {
         throw new InternalServerError('Order was not created. Please try again.');
     }
@@ -227,6 +252,92 @@ const createOrder = async (
     await createOrderItems(connection, orderId, items);
 
     return orderId;
+};
+
+const updateOrderStatus = async (
+    connection,
+    orders_id,
+    statuses_id
+) => {
+    if (orders_id == null || statuses_id == null) {
+        throw new BadRequestError('Order ID and Status ID are required');
+    }
+
+    const builder = new UpdateQueryBuilder();
+    builder
+        .update('orders')
+        .set('statuses_id = ?')
+        .where('id = ?');
+
+    const query = builder.build();
+    const result = await query.run(connection, [statuses_id, orders_id]);
+
+    if (result.affectedRows === 0) {
+        throw new InternalServerError('Order status was not updated. Please try again.');
+    }
+
+    return true;
+};
+
+const updateAddress = async (
+    connection,
+    users_id,
+    orders_id,
+    address
+) => {
+    if (orders_id == null) {
+        throw new BadRequestError('Order ID and Address ID are required');
+    }
+    if (address == null) {
+        throw new BadRequestError('Address is required');
+    }
+    const filteredAddress = checkAddressValidity(address);
+    if (Object.keys(filteredAddress).length === 0) {
+        throw new BadRequestError('Address is required');
+    }
+
+    // Check if an order has the address
+    const addressQueryBuilder = new SelectQueryBuilder();
+    builder
+        .select(['id AS orders_id', 'addresses.id AS addresses_id', 'users_id'])
+        .from('orders')
+        .where('id = ?')
+        .join('addresses', 'orders.addresses_id = addresses.id', 'INNER');
+    
+    const addressQuery = addressQueryBuilder.build();
+    const addressResult = await addressQuery.run(connection, [orders_id]);
+
+    if (addressResult.length === 0) {
+        throw new InternalServerError('Order address was not found. Please try again.');
+    }
+    if (addressResult[0].users_id !== users_id) {
+        throw new BadRequestError('You are not authorized to update this order address');
+    }
+    if (addressResult[0].addresses_id === null) {
+        throw new NotFoundError('Order address is not available');
+    }
+
+    const validKeys = filteredAddress.keys();
+    const values = validKeys.map(key => filteredAddress[key]);
+    values.push(addressResult[0].addresses_id);
+
+    const builder = new UpdateQueryBuilder();
+    builder
+        .update('addresses')
+        .where('id = ?');
+
+    validKeys.forEach((key, index) => {
+        builder.set(key, '?');
+    });
+    
+    const query = builder.build();
+    const result = await query.run(connection, values);
+
+    if (result.affectedRows === 0) {
+        throw new InternalServerError('Order address was not updated. Please try again.');
+    }
+
+    return true;
 };
 
 module.exports = {

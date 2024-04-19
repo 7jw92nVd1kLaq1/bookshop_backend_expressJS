@@ -198,17 +198,14 @@ const createBooks = async (connection, books) => {
             throw new BadRequestError('Some books are missing required keys. The first book you send defines all the required keys.');
         }
         return mappedValues;
-    }).flat();
+    });
 
     // create a list of placeholders for each book object
-    const placeholders = insertColumns.map(() => '?');
-    const placeholdersList = books.map(b => [...placeholders]);
-
     const builder = new InsertQueryBuilder();
     builder
         .insert(insertColumns)
         .into('books')
-        .values(placeholdersList);
+        .values(['?']);
 
     const query = builder.build();
     const result = await query.run(connection, values);

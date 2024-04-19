@@ -10,7 +10,7 @@ const {
 
 const { validate } = require('../middlewares/validate-middleware');
 const { allowAccessToLoggedInUser } = require('../middlewares/auth-middleware');
-const { all } = require('./carts');
+
 
 router.post(
     '/',

@@ -91,6 +91,13 @@ class Query {
 class InsertQuery extends Query {
     #count;
     #query;
+    #multiValues;
+
+    static checkIfMultiValues(queryString) {
+        const hasSingleQuestionMark = (queryString.match(/\?/g) || []).length === 1;
+        const isNotSurroundedByParens = !/\(\s*\?\s*\)/.test(queryString);
+        return hasSingleQuestionMark && isNotSurroundedByParens;
+    }
 
     constructor(queryString) {
         super();
@@ -100,11 +107,19 @@ class InsertQuery extends Query {
 
         this.#query = queryString;
         this.#count = queryString.split('?').length - 1;
+        
+        if (this.#count === 1) {
+            this.#multiValues = InsertQuery.checkIfMultiValues(queryString);
+        }
     }
 
     setQueryString(queryString) {
         this.#query = queryString;
         this.#count = queryString.split('?').length - 1;
+
+        if (this.#count === 1) {
+            this.#multiValues = InsertQuery.checkIfMultiValues(queryString);
+        }
     }
 
     getQueryString() {
@@ -115,8 +130,16 @@ class InsertQuery extends Query {
         if (!Array.isArray(args)) {
             throw new Error('Arguments must be an array.');
         }
-        if (args.length !== this.#count) {
-            throw new Error(`Number of arguments does not match the number of placeholders. It should have ${this.#count} arguments.`);
+
+        // Check if the number of arguments matches the number of placeholders
+        if (this.#count > 1 && args.length !== this.#count) {
+            throw new Error(`${this.#query}, Number of arguments does not match the number of placeholders. Argument should be of array and have ${this.#count} elements of string.`);
+        } else if (this.#multiValues === true) {
+            const isArrayforArray = args.every(v => Array.isArray(v));
+            if (isArrayforArray === false) {
+                throw new Error(`${this.#query}, ` + 'since you have one placeholder without parentheses, argument must be an array of arrays.');
+            }
+            args = [args];
         }
 
         try {
@@ -351,11 +374,18 @@ class InsertQueryBuilder extends QueryBuilder {
         return this;
     }
 
-    values(values = []) {
+    values(values = ['?']) {
         if (Array.isArray(values) === false) {
             throw new Error('Values must be an array.');
         } else if (values.length === 0) {
             throw new Error('Values array cannot be empty.');
+        }
+
+        // If values is an array with a single element of '?', set it as a string for 2D array
+        // during the build process
+        if (values.length === 1 && values[0] === '?') {
+            this.query.values = values[0];
+            return this;
         }
 
         const isArrayforArray = values.every(v => Array.isArray(v));
@@ -376,18 +406,20 @@ class InsertQueryBuilder extends QueryBuilder {
             throw new Error('Values are required.');
         }
 
-        for (let i = 0; i < this.query.values.length; i++) {
-            const values = this.query.values[i];
-            if (values.length === 0) {
-                throw new Error('Values array cannot be empty.');
-            }
-            const isEveryValueValid = values.every(v => typeof v === 'string');
-            if (isEveryValueValid === false) {
-                throw new Error('Values must be an array of strings.');
+        if (Array.isArray(this.query.values)) {
+            for (let i = 0; i < this.query.values.length; i++) {
+                const values = this.query.values[i];
+                if (values.length === 0) {
+                    throw new Error('Values array cannot be empty.');
+                }
+                const isEveryValueValid = values.every(v => typeof v === 'string');
+                if (isEveryValueValid === false) {
+                    throw new Error('Values must be an array of strings.');
+                }
             }
         }
 
-        if (this.query.insert.length > 0) {
+        if (this.query.insert.length > 0 && Array.isArray(this.query.values)) {
             const valuesProvided = this.query.values.every(v => v.length === this.query.insert.length);
             if (valuesProvided === false) {
                 throw new Error('Number of values does not match the number of columns.');
@@ -399,7 +431,11 @@ class InsertQueryBuilder extends QueryBuilder {
             queryString += ` (${this.query.insert.join(', ')})`;
         }
         queryString += ' VALUES ';
-        queryString += this.query.values.map(v => `(${v.join(', ')})`).join(', ');
+        if (Array.isArray(this.query.values) === false) {
+            queryString += this.query.values;
+        } else {
+            queryString += this.query.values.map(v => `(${v.join(', ')})`).join(', ');
+        }
 
         return new InsertQuery(queryString);
     }
@@ -773,16 +809,19 @@ const stringifyColumns = (columns = []) => {
 //     .build();
 // console.log(selectQuery.getQueryString());
 
-// const builder = new InsertQueryBuilder();
-// const query = builder
-//     .insert(['name', 'email'])
-//     .into('users')
-//     .values([
-//         ['?', '?'],
-//         ['?', '?'],
-//         ['?', '?'],
-//     ])
-//     .build();
+// (async () => {
+//     const builder = new InsertQueryBuilder();
+//     const query = builder
+//         .insert(['name'])
+//         .into('users')
+//         .values([
+//             ['?']
+//         ])
+//         .build();
+//     console.log(query.getQueryString());
+
+//     const result = await query.run(promisePool, ['John Doe']);
+// })();
 
 // const builder = new DeleteQueryBuilder();
 // const query = builder

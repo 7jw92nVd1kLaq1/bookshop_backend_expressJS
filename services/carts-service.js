@@ -126,10 +126,10 @@ const addItemToCart = async (connection, carts_id, books_id, quantity = 1) => {
     builder
         .insert(['carts_id', 'books_id', 'amount'])
         .into('carts_items')
-        .values([['?', '?', '?']]);
+        .values(['?']);
     
     const query = builder.build();
-    const result = await query.run(connection, [carts_id, books_id, quantity]);
+    const result = await query.run(connection, [[carts_id, books_id, quantity]]);
 
     if (result.affectedRows === 0) {
         return null;
