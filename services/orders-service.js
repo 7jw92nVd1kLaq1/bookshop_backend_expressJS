@@ -43,7 +43,7 @@ const getAllOrders = async (options = {}, values = []) => {
     const {
         select = ['*'],
         where = [],
-        joins = [],
+        join = [],
         offset = null,
         limit = null,
         orderBy = [],
@@ -55,7 +55,7 @@ const getAllOrders = async (options = {}, values = []) => {
     builder.select(select).from('orders');
     if (limit) builder.limit(limit);
     if (offset) builder.offset(offset);
-    joins.forEach(j => {
+    join.forEach(j => {
         builder.join(
             j.table, 
             j.on, 
@@ -80,7 +80,7 @@ const getAllOrders = async (options = {}, values = []) => {
 const getOrderById = async (id, usersId, options = {}) => {
     const {
         select = ['*'],
-        joins = [],
+        join = [],
         offset = null,
         limit = null,
         orderBy = [],
@@ -102,7 +102,7 @@ const getOrderById = async (id, usersId, options = {}) => {
         .where('orders.id = ? AND orders.users_id = ?');
     if (limit) builder.limit(limit);
     if (offset) builder.offset(offset);
-    joins.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
+    join.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
     orderBy.forEach(o => builder.orderBy(o.column, o.order));
     groupBy.forEach(g => builder.groupBy(g));
     having.forEach(h => builder.having(h));
@@ -115,6 +115,33 @@ const getOrderById = async (id, usersId, options = {}) => {
     }
 
     return orders;
+};
+
+const getOrderAddress = async (addressesId, options = {}) => {
+    const {
+        select = ['*'],
+        join = [],
+    } = options;
+
+    if (addressesId == null) {
+        throw new BadRequestError('Address ID is required');
+    }
+
+    const builder = new SelectQueryBuilder();
+    builder
+        .select(select)
+        .from('addresses')
+        .where('id = ?');
+    join.forEach(j => builder.join(j.table, j.on, j.type ? j.type : 'INNER'));
+
+    const query = builder.build();
+    const addresses = await query.run([addressesId]);
+
+    if (addresses.length < 1) {
+        return null;
+    }
+
+    return addresses[0];
 };
 
 const createAddress = async (
@@ -343,5 +370,6 @@ const updateAddress = async (
 module.exports = {
     getAllOrders,
     getOrderById,
+    getOrderAddress,
     createOrder
 };

@@ -62,7 +62,6 @@ const getAllBooks = async (options = {}, values = []) => {
     having.forEach(h => builder.having(h));
 
     const query = builder.build();
-    console.log(query.getQueryString());
     const books = await query.run(values);
 
     if (!books.length) {
