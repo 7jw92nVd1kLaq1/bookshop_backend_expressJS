@@ -1,6 +1,6 @@
 const { StatusCodes } = require('http-status-codes');
 
-const { promisePool } = require('../db');
+const { promisePool, sequelize } = require('../db');
 const { 
     changeUserPassword,
     createUser, 
@@ -24,12 +24,11 @@ const signUp = async (req, res, next) => {
         });
     }
 
-    const connection = await promisePool.getConnection();
-    await connection.beginTransaction();
+    const transaction = await sequelize.transaction();
 
     try {
-        const user = await createUser(connection, email, password, nickname);
-        await connection.commit();
+        const user = await createUser(transaction, email, password, nickname);
+        await transaction.commit();
 
         const token = createUserToken(user);
         res.cookie('token', token, {
@@ -40,10 +39,8 @@ const signUp = async (req, res, next) => {
             message: 'User created'
         });
     } catch (error) {
-        await connection.rollback();
+        await transaction.rollback();
         next(error);
-    } finally {
-        connection.release();
     }
 };
 
@@ -132,20 +129,17 @@ const initiatePasswordResetProcess = async (req, res, next) => {
         });
     }
 
-    const connection = await promisePool.getConnection();
-    await connection.beginTransaction();
+    const transaction = await sequelize.transaction();
 
     try {
-        await generatePasswordResetCode(connection, user.id);
-        await connection.commit();
+        await generatePasswordResetCode(user.id, transaction);
+        await transaction.commit();
         return res.status(StatusCodes.CREATED).json({
             message: 'Password reset code sent to your email'
         });
     } catch (error) {
-        await connection.rollback();
+        await transaction.rollback();
         next(error);
-    } finally {
-        connection.release();
     }
 };
 

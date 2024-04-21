@@ -216,11 +216,11 @@ class SelectQuery extends Query {
         return this.#query;
     }
 
-    async run(args = []) {
+    async run(args = [], multiValues = false) {
         if (!Array.isArray(args)) {
             throw new Error('Arguments must be an array.');
         }
-        if (args.length !== this.#count) {
+        if (multiValues === false && args.length !== this.#count) {
             throw new Error(`Number of arguments does not match the number of placeholders. It should have ${this.#count} arguments.`);
         }
 

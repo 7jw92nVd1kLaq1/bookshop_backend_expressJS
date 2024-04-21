@@ -12,6 +12,9 @@ const {
     SelectQueryBuilder,
 } = require('../utils/sql-utils');
 
+const { Roles } = require('../models/auth-models');
+const { Users, UsersRoles } = require('../models/users-models');
+
 
 const assignUserRoles = async (connection, user_id, roles) => {
     const query = 'INSERT INTO users_roles (user_id, roles_id) VALUES ?';
@@ -86,7 +89,7 @@ const checkPasswordRequirements = (password) => {
     return true;
 };
 
-const createUser = async (connection, email, password, nickname) => {
+const createUser = async (transaction, email, password, nickname) => {
     if (!checkEmailRequirements(email)) {
         throw new EmailDoesNotMeetRequirementsError();
     }
@@ -113,43 +116,48 @@ const createUser = async (connection, email, password, nickname) => {
     if (user) {
         throw new UserAlreadyExistsError();
     }
-
-    const roles = await getAvailableRoles();
-    const userRole = roles.find(role => role.name === 'User');
     
     const passwordHash = await generateBcryptHash(password);
+    user = Users.build({
+        email,
+        password: passwordHash,
+        nickname
+    });
 
-    // Inserting user into the database
-    const userGenerateQuery = 'INSERT INTO users (email, password, nickname) VALUES (?, ?, ?)';
-    const userValues = [email, passwordHash, nickname];
-
-    let usersResult;
     try {
-        [usersResult] = await connection.query(userGenerateQuery, userValues);
-        if (!usersResult.insertId) {
-            throw new Error();
-        }
+        await user.save({transaction});
     } catch (error) {
         console.log(`DB error occurred in "createUser": ${error.message}`);
         throw new InternalServerError('Error occurred while creating user. Please try again.');
     }
+
+    await user.reload({transaction});
 
     // Assigning user role
-    const roleGenerateQuery = 'INSERT INTO users_roles (users_id, roles_id) VALUES (?, ?)';
-    const roleValues = [usersResult.insertId, userRole.id];
+    const role = await Roles.findOne({
+        where: {
+            name: 'user'
+        },
+        attributes: ['id', 'name', 'weight']
+    });
+    const usersRoles = UsersRoles.build({
+        usersId: user.id,
+        rolesId: role.id,
+    });
 
-    let rolesResult;
     try {
-        [rolesResult] = await connection.query(roleGenerateQuery, roleValues);
-        if (!rolesResult.insertId) {
-            throw new Error();
-        }
+        await usersRoles.save({transaction});
+        return {
+            sub: user.id, 
+            email, 
+            nickname, 
+            role: role.name, 
+            role_weight: role.weight
+        };
     } catch (error) {
         console.log(`DB error occurred in "createUser": ${error.message}`);
         throw new InternalServerError('Error occurred while creating user. Please try again.');
     }
-
-    return {sub: usersResult.insertId, email, nickname, role: userRole.name, role_weight: userRole.weight};
 };
 
 const changeUserPassword = async (connection, user_id, password) => {
@@ -158,7 +166,7 @@ const changeUserPassword = async (connection, user_id, password) => {
     }
 
     // Check if user exists, if not, throw an error
-    await getUserById(user_id, ['id']);
+    await getUserById(user_id, {columns: ['id']});
 
     const passwordHash = await generateBcryptHash(password);
     const query = 'UPDATE users SET password = ? WHERE id = ?';
@@ -197,10 +205,12 @@ const getAllUsers = async ({columns = ['*'], joins = [], limit = null, orderBy =
     return users;
 };
 
-const getUserByEmail = async (email, options = {columns: ['*'], joins : []}) => {
+const getUserByEmail = async (email, options = {}) => {
+    const {columns = ['*'], joins = []} = options;
+
     const builder = new SelectQueryBuilder();
-    builder.select(options.columns).from('users').where('email = ?');
-    options.joins.forEach(j => builder.join(j.table, j.on));
+    builder.select(columns).from('users').where('email = ?');
+    joins.forEach(j => builder.join(j.table, j.on));
 
     const query = builder.build();
     const users = await query.run([email]);
@@ -213,10 +223,12 @@ const getUserByEmail = async (email, options = {columns: ['*'], joins : []}) => 
     return user;
 };
 
-const getUserById = async (id, options = {columns: ['*'], joins : []}) => {
+const getUserById = async (id, options = {}) => {
+    const {columns = ['*'], joins = []} = options;
+
     const builder = new SelectQueryBuilder();
-    builder.select(options.columns).from('users').where('id = ?');
-    options.joins.forEach(j => builder.join(j.table, j.on));
+    builder.select(columns).from('users').where('id = ?');
+    joins.forEach(j => builder.join(j.table, j.on));
 
     const query = builder.build();
     const users = await query.run([id]);

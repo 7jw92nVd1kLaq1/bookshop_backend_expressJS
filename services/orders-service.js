@@ -39,7 +39,7 @@ const checkAddressValidity = (address) => {
 
 
 
-const getAllOrders = async (options = {}, values = []) => {
+const getAllOrders = async (options = {}, values = [], isMultiValues = false) => {
     const {
         select = ['*'],
         where = [],
@@ -68,7 +68,7 @@ const getAllOrders = async (options = {}, values = []) => {
     having.forEach(h => builder.having(h));
 
     const query = builder.build();
-    const orders = await query.run(values);
+    const orders = await query.run(values, isMultiValues);
 
     if (orders.length === 0) {
         return [];

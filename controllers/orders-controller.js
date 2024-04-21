@@ -1,7 +1,6 @@
 const {
     createOrder,
     getOrderById,
-    getOrderAddress,
     getAllOrders
 } = require('../services/orders-service');
 const {
@@ -86,6 +85,8 @@ const fetchOrder = async (req, res, next) => {
 
     const orderQueryOptions = {
         select: [
+            'orders.id AS orders_id',  
+            'addresses_id',
             'addresses.recipient',
             'addresses.phone_number',
             'addresses.address1',
@@ -94,8 +95,8 @@ const fetchOrder = async (req, res, next) => {
             'addresses.state',
             'addresses.country',
             'addresses.postal_code',
-            'statuses.name AS status',
-            'statuses.id AS status_id'
+            'statuses.name AS statuses_name',
+            'statuses.id AS statuses_id'
         ],
         join: [
             {
@@ -123,20 +124,9 @@ const fetchOrder = async (req, res, next) => {
             throw new NotFoundError('Books for order not found');
         }
 
-        // Remove addresses_id from books and prepare return data
-        for (let i = 0; i < books.length; i++) {
-            delete books[i].addresses_id;
-        }
+        order.books = books;
 
-        const returnData = {};
-        returnData.books = books;
-        returnData.status = { status: order.status, status_id: order.status_id };
-
-        delete order.status;
-        delete order.status_id;
-        returnData.address = order;
-
-        return res.status(StatusCodes.OK).json(returnData);
+        return res.status(StatusCodes.OK).json(order);
     } catch (error) {
         next(error);
     }
@@ -162,7 +152,13 @@ const fetchAllOrders = async (req, res, next) => {
             },
         ],
         limit: amount ? amount : null,
-        offset: page ? (page - 1) * amount : null
+        offset: page ? (page - 1) * amount : null,
+        orderBy: [
+            {
+                column: 'orders.created_at',
+                order: 'DESC'
+            }
+        ]
     };
 
     const ordersBooksQueryOptions = {
@@ -199,7 +195,7 @@ const fetchAllOrders = async (req, res, next) => {
             }
         ],
         where: [
-            `orders.users_id = ?`
+            'orders.id IN (?)'
         ]
     };
 
@@ -209,7 +205,11 @@ const fetchAllOrders = async (req, res, next) => {
             throw new NotFoundError('Orders not found');
         }
 
-        const ordersBooks = await getAllOrders(ordersBooksQueryOptions, [user.sub]);
+        const ordersBooks = await getAllOrders(
+            ordersBooksQueryOptions, 
+            [orders.map(order => order.orders_id)],
+            true
+        );
         if (ordersBooks.length === 0) {
             throw new NotFoundError('Orders books not found');
         }

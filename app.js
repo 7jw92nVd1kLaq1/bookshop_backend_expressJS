@@ -4,6 +4,8 @@ const cookieParser = require('cookie-parser');
 const { port } = require('./config');
 const throwError = require('./middlewares/error-middleware');
 
+const {} = require('./models/index');
+
 const booksRouter = require('./routes/books');
 const usersRouter = require('./routes/users');
 const publishersRouter = require('./routes/publishers');

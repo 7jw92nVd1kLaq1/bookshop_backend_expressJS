@@ -2,6 +2,8 @@ const { dbHost, dbPort, dbUser, dbPassword, dbName } = require('./config');
 const mysqlSync = require('mysql2');
 const mysql = require('mysql2/promise');
 
+const { Sequelize } = require('sequelize');
+
 const pool = mysqlSync.createPool({
     host: dbHost,
     port: dbPort,
@@ -28,7 +30,19 @@ const promisePool = mysql.createPool({
     enableKeepAlive: true,
 });
 
+const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
+    host: dbHost,
+    port: dbPort,
+    dialect: 'mysql',
+    pool: {
+        max: 10,
+        min: 0,
+        idle: 10000
+    },
+});
+
 module.exports = {
     pool,
-    promisePool
+    promisePool,
+    sequelize
 };
