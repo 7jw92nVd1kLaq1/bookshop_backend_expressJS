@@ -152,7 +152,7 @@ const createUser = async (transaction, email, password, nickname) => {
             email, 
             nickname, 
             role: role.name, 
-            role_weight: role.weight
+            weight: role.weight
         };
     } catch (error) {
         console.log(`DB error occurred in "createUser": ${error.message}`);
@@ -205,18 +205,21 @@ const getAllUsers = async ({columns = ['*'], joins = [], limit = null, orderBy =
     return users;
 };
 
-const getUserByEmail = async (email, options = {}) => {
-    const {columns = ['*'], joins = []} = options;
+const getUserByEmail = async (email, queryOptions) => {
+    if (!email) {
+        throw new Error('Email is required');
+    }
+    if (typeof email !== 'string') {
+        throw new Error('Email must be a string');
+    }
+    if (queryOptions && typeof queryOptions !== 'object') {
+        throw new Error('Query options must be an object');
+    }
 
-    const builder = new SelectQueryBuilder();
-    builder.select(columns).from('users').where('email = ?');
-    joins.forEach(j => builder.join(j.table, j.on));
+    queryOptions.where = {email};
 
-    const query = builder.build();
-    const users = await query.run([email]);
-    const user = users[0];
-
-    if (!user) {
+    const user = await Users.findOne(queryOptions);
+    if (user == null) {
         throw new UserNotFoundError();
     }
 

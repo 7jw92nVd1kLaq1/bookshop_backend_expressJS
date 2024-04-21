@@ -12,7 +12,6 @@ const {
     validatePasswordResetCode,
     markPasswordResetCodeAsUsed,
 } = require('../services/auth-service');
-
 const { comparePlaintextToBcryptHash } = require('../utils/hash-utils');
 
 
@@ -53,34 +52,40 @@ const signIn = async (req, res, next) => {
     }
 
     try {
-        const columns = [
-            'users.id AS sub', 
-            'users.email AS email', 
-            'users.password AS password', 
-            'users.nickname AS nickname',
-            'roles.name AS role',
-            'roles.weight AS weight'
-        ];
-        const joins = [
-            {
-                table: 'users_roles',
-                on: 'users.id = users_roles.users_id'
-            },
-            {
-                table: 'roles',
-                on: 'users_roles.roles_id = roles.id'
-            }
-        ];
+        // Sequelize query options for retrieving user data
+        const queryOptions = {
+            attributes: [
+                ['id', 'sub'], 
+                'email',
+                'password', 
+                'nickname'
+            ],
+            include: [
+                {
+                    association: 'roles',
+                    attributes: ['name', 'weight'],
+                    order: [
+                        ['weight', 'ASC']
+                    ]
+                }
+            ],
+        };
 
-        let user = await getUserByEmail(email, { columns, joins })
-        const isPasswordValid = await comparePlaintextToBcryptHash(password, user.password);
+        let user = await getUserByEmail(email, queryOptions);
+        const isPasswordValid = await comparePlaintextToBcryptHash(password, user.get('password'));
         if (!isPasswordValid) {
             return res.status(StatusCodes.UNAUTHORIZED).json({
                 message: 'Invalid email or password'
             });
         }
 
-        delete user.password;
+        user = { 
+            sub: user.get('sub'), 
+            email: user.get('email'), 
+            nickname: user.get('nickname'), 
+            role: user.get('roles')[0].name, 
+            weight: user.get('roles')[0].weight
+        };
 
         const token = createUserToken(user);
         res.cookie('token', token, {
@@ -130,7 +135,6 @@ const initiatePasswordResetProcess = async (req, res, next) => {
     }
 
     const transaction = await sequelize.transaction();
-
     try {
         await generatePasswordResetCode(user.id, transaction);
         await transaction.commit();

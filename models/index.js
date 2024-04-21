@@ -193,24 +193,5 @@ const initialize = async () => {
 }
 
 module.exports = {
-    Authors,
-    AuthorsLikes,
-    Addresses,
-    Books,
-    BooksImages,
-    BooksLikes,
-    Carts,
-    CartsItems,
-    Categories,
-    Orders,
-    OrdersBooks,
-    Prices,
-    ProfileImages,
-    Reviews,
-    Statuses,
-    TrackingCodes,
-    Users,
-    UsersRoles,
-    Roles,
-    PasswdResets
+    initialize
 };
