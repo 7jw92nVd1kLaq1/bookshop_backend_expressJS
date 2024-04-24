@@ -62,6 +62,10 @@ const Users = sequelize.define('users', {
         }
     }
 }, {
+    name: {
+        singular: 'users',
+        plural: 'users'
+    },
     timestamps: false,
     hooks: {
         beforeUpdate: (user) => {
@@ -71,9 +75,6 @@ const Users = sequelize.define('users', {
     scopes: {
         byId(id) {
             return {
-                attributes: {
-                    exclude: ['password']
-                },
                 where: {
                     id
                 },
@@ -116,6 +117,10 @@ const UsersRoles = sequelize.define('users_roles', {
         }
     }
 }, {
+    name: {
+        singular: 'usersRole',
+        plural: 'usersRoles'
+    },
     timestamps: false
 });
 
@@ -148,6 +153,10 @@ const ProfileImages = sequelize.define('profile_images', {
         }
     }
 }, {
+    name: {
+        singular: 'profileImage',
+        plural: 'profileImages'
+    },
     timestamps: false
 });
 

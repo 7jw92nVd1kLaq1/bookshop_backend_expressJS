@@ -1,5 +1,6 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const cors = require('cors');
 
 const { port } = require('./config');
 const throwError = require('./middlewares/error-middleware');
@@ -8,7 +9,6 @@ const {} = require('./models/index');
 
 const booksRouter = require('./routes/books');
 const usersRouter = require('./routes/users');
-const publishersRouter = require('./routes/publishers');
 const authenticationRouter = require('./routes/authentication');
 const categoriesRouter = require('./routes/categories');
 const authorsRouter = require('./routes/authors');
@@ -19,10 +19,10 @@ const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(cors({origin: `http://localhost:${port}`}));
 
 app.use('/books', booksRouter);
 app.use('/users', usersRouter);
-app.use('/publishers', publishersRouter);
 app.use('/', authenticationRouter);
 app.use('/categories', categoriesRouter);
 app.use('/authors', authorsRouter);

@@ -16,7 +16,6 @@ router.post(
     '/',
     [
         allowAccessToLoggedInUser,
-        body('carts_id').isInt().toInt(),
         body('books').isArray().notEmpty(),
         body('address').isObject().notEmpty(),
         validate

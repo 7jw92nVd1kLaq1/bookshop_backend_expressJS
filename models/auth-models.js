@@ -22,6 +22,10 @@ const Roles = sequelize.define('roles', {
         allowNull: true
     },
 }, {
+    name: {
+        singular: 'roles',
+        plural: 'roles'
+    },
     timestamps: false
 });
 
@@ -65,6 +69,10 @@ const PasswdResets = sequelize.define('passwd_resets', {
     }
 }, {
     timestamps: false,
+    name: {
+        singular: 'passwdReset',
+        plural: 'passwdResets'
+    },
     hooks: {
         beforeCreate: (passwdReset) => {
             passwdReset.expiredAt = new Date();

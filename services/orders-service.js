@@ -15,6 +15,15 @@ const {
     getAllBooks
 } = require('./books-service');
 
+const {
+    Prices
+} = require('../models/books-models');
+const {
+    Addresses,
+    Orders,
+    OrdersBooks
+} = require('../models/orders-models');
+
 const checkAddressValidity = (address) => {
     const validKeys = [
         'recipient', 
@@ -23,8 +32,8 @@ const checkAddressValidity = (address) => {
         'city', 
         'state', 
         'country', 
-        'postal_code', 
-        'phone_number'
+        'postalCode', 
+        'phoneNumber'
     ];
 
     const addressKeys = Object.keys(address);
@@ -37,7 +46,14 @@ const checkAddressValidity = (address) => {
     return address;
 };
 
+const getAllOrdersSequelize = async (options = {}) => {
+    if (typeof options !== 'object') {
+        throw new BadRequestError('Options must be an object.');
+    }
 
+    const orders = await Orders.findAll(options);
+    return orders;
+};
 
 const getAllOrders = async (options = {}, values = [], isMultiValues = false) => {
     const {
@@ -145,7 +161,7 @@ const getOrderAddress = async (addressesId, options = {}) => {
 };
 
 const createAddress = async (
-    connection,
+    transaction,
     usersId,
     address
 ) => {
@@ -159,8 +175,8 @@ const createAddress = async (
         'city', 
         'state', 
         'country', 
-        'postal_code', 
-        'phone_number'
+        'postalCode', 
+        'phoneNumber'
     ];
 
     for (let key of validKeys) {
@@ -169,37 +185,20 @@ const createAddress = async (
         }
     }
 
-    validKeys.push('users_id');
+    const newAddress = await Addresses.create({
+        ...address,
+        userId: usersId
+    }, { transaction });
 
-    const values = [
-        address.recipient,
-        address.address1,
-        address.address2,
-        address.city,
-        address.state,
-        address.country,
-        address.postal_code,
-        address.phone_number,
-        usersId
-    ];
-
-    const builder = new InsertQueryBuilder();
-    builder
-        .insert(validKeys)  
-        .into('addresses')
-        .values(['?']);
-
-    const query = builder.build();
-
-    const result = await query.run(connection, [values]);
-    if (result.affectedRows === 0) {
+    if (newAddress === null) {
         throw new InternalServerError('Address was not created. Please try again.');
     }
-    return result.insertId;
+
+    return newAddress.id;
 };
 
 const createOrderItems = async (
-    connection,
+    transaction,
     ordersId,
     items
 ) => {
@@ -210,7 +209,7 @@ const createOrderItems = async (
         throw new BadRequestError('Items are required');
     }
 
-    const booksIds = items.map(item => item.books_id);
+    const booksIds = items.map(item => item.booksId);
     // Get the latest price for each book
     const latestPriceQueryOptions = {
         columns: [
@@ -225,60 +224,48 @@ const createOrderItems = async (
     }
 
     // Check if the items have the required fields
-    const validKeys = ['orders_id', 'prices_id', 'amount'];
-    const values = items.map(item => {
-        const price = latestPrices.find(p => p.id === item.books_id);
-        return [ordersId, price.prices_id, item.amount];
-    });
-    const isEmpty = values.some(v => v.some(i => i == null));
-    if (isEmpty) {
-        throw new BadRequestError('Some fields are missing in the items. Please check again.');
-    }
+    const validKeys = ['ordersId', 'pricesId', 'amount'];
+    for (let i=0; i<items.length; i++) {
+        const price = latestPrices.find(p => p.id === items[i].booksId);
+        items[i] = { ...items[i], ordersId: ordersId, pricesId: price.prices_id};
 
-    const builder = new InsertQueryBuilder();
-    builder
-        .insert(validKeys)
-        .into('orders_books')
-        .values(['?']);
+        delete items[i].booksId;
+        validKeys.forEach(key => {
+            if (items[i][key] == null) {
+                throw new BadRequestError(`Field '${key}' is required`);
+            }
+        });
+    };
 
-    const query = builder.build();
-
-    const result = await query.run(connection, values);
-    if (result.affectedRows !== items.length) {
+    const orderBooks = await OrdersBooks.bulkCreate(items, { transaction });
+    if (orderBooks === null) {
         throw new InternalServerError('Order items were not created. Please try again.');
     }
-    return result.affectedRows;
+    return orderBooks;
 };
 
 const createOrder = async (
-    connection,
+    transaction,
     usersId,
     items,
     address,
 ) => {
-    const addressId = await createAddress(connection, usersId, address);
+    const addressId = await createAddress(transaction, usersId, address);
     if (addressId === null) {
         throw new InternalServerError('Address was not created. Please try again.');
     }
 
-    const builder = new InsertQueryBuilder();
-    builder
-        .insert(['users_id', 'addresses_id', 'statuses_id'])
-        .into('orders')
-        .values(['?']);
-
-    const createOrderQuery = builder.build();
-    // 200 represents the pending status, which means the order is not yet processed
-    const createOrderValues = [usersId, addressId, 200];
-
-    const createOrderResult = await createOrderQuery.run(connection, [createOrderValues]);
-    if (createOrderResult.affectedRows === 0) {
+    const order = await Orders.create({
+        usersId: usersId,
+        addressesId: addressId,
+        statusesId: 200
+    }, { transaction });
+    if (order === null) {
         throw new InternalServerError('Order was not created. Please try again.');
     }
-    const orderId = createOrderResult.insertId;
-    await createOrderItems(connection, orderId, items);
 
-    return orderId;
+    await createOrderItems(transaction, order.id, items);
+    return order.id;
 };
 
 const updateOrderStatus = async (
@@ -369,6 +356,7 @@ const updateAddress = async (
 
 module.exports = {
     getAllOrders,
+    getAllOrdersSequelize,
     getOrderById,
     getOrderAddress,
     createOrder

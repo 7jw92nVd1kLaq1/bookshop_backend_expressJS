@@ -1,10 +1,11 @@
 const { BooksNotFoundError } = require('../exceptions/books-exceptions');
-const { BadRequestError, InternalServerError } = require('../exceptions/generic-exceptions');
+const { BadRequestError, InternalServerError, NotFoundError } = require('../exceptions/generic-exceptions');
 const { 
     InsertQueryBuilder,
-    DeleteQueryBuilder,
     SelectQueryBuilder,
 } = require('../utils/sql-utils');
+
+const { Books, BooksLikes } = require('../models/books-models');
 
 
 // a function for removing unwanted keys from a book object
@@ -36,6 +37,18 @@ const sanitizeBook = (book) => {
     return sanitizedBook;
 };
 
+const getAllBooksSequelize = async (options = {}) => {
+    if (typeof options !== 'object') {
+        throw new BadRequestError('Options must be an object.');
+    }
+
+    const books = await Books.findAll(options);
+    if (books.length === 0) {
+        throw new BooksNotFoundError();
+    }
+
+    return books;
+};
 
 const getAllBooks = async (options = {}, values = []) => {
     const {
@@ -219,48 +232,54 @@ const createBooks = async (connection, books) => {
     return sanitizedBooks;
 };
 
-const createBooksLike = async (connection, books_id, users_id) => {
+const createBooksLike = async (books_id, users_id, transaction = null) => {
     if (books_id == null || users_id == null) {
         throw new BadRequestError('Books ID and Users ID are required.');
     }
 
-    const builder = new InsertQueryBuilder();
-    builder
-        .insert(['books_id', 'users_id'])
-        .into('books_likes')
-        .values([['?', '?']]);
+    const queryOptions = {
+        books_id,
+        users_id
+    };
+    const createOptions = {};
+    if (transaction) createOptions.transaction = transaction;
 
-    const query = builder.build();
-    const result = await query.run(connection, [books_id, users_id]);
-
-    if (result.affectedRows === 0) {
-        throw new InternalServerError('Books like was not created. Please try again.');
+    try {
+        const booksLike = await BooksLikes.create(queryOptions, createOptions);
+        if (booksLike == null) {
+            throw new InternalServerError('Books like was not created. Please try again.');
+        }
+        return booksLike;
     }
-
-    return true;
+    catch (error) {
+        console.log(`DB error occurred in "createBooksLike": ${error.message}`);
+        throw new InternalServerError('Error occurred while creating books like. Please try again.');
+    }
 };
 
-const deleteBooksLike = async (connection, books_id, users_id) => {
-    if (connection == null) {
-        throw new BadRequestError('Connection is required.');
-    }
+const deleteBooksLike = async (books_id, users_id, transaction = null) => {
     if (books_id == null || users_id == null) {
-        throw new BadRequestError('Books ID and User ID are required.');
+        throw new BadRequestError('Books ID and Users ID are required.');
     }
-    const builder = new DeleteQueryBuilder();
-    builder
-        .from('`books_likes`')
-        .where('`books_id` = ?')
-        .where('`users_id` = ?');
+    const queryOptions = {
+        where: {
+            books_id,
+            users_id
+        }
+    };
+    if (transaction) queryOptions.transaction = transaction;
 
-    const query = builder.build();
-    const result = await query.run(connection, [books_id, users_id]);
-
-    if (result.affectedRows === 0) {
-        throw new InternalServerError('Books like was not deleted. Please try again.');
+    let booksLike;
+    try {
+        booksLike = await BooksLikes.destroy(queryOptions);
+    } catch (error) {
+        console.log(`DB error occurred in "deleteBooksLike": ${error.message}`);
+        throw new InternalServerError('Error occurred while deleting books like. Please try again.');
     }
 
-    return true;
+    if (booksLike == 0) {
+        throw new NotFoundError('Books like was not found.');
+    }
 };
 
 module.exports = {
@@ -268,8 +287,9 @@ module.exports = {
     createBooksLike,
     deleteBooksLike,
     getAllBooks,
+    getAllBooksSequelize,
     getBookById,
     getBooksByAuthor,
     getBooksByCategory,
-    getBooksReleasedInTheLastMonth
+    getBooksReleasedInTheLastMonth,
 };

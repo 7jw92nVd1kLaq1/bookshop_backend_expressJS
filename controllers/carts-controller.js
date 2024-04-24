@@ -6,14 +6,17 @@ const {
     NotFoundError
 } = require('../exceptions/generic-exceptions');
 const { 
-    getAllCarts, 
+    getAllCarts,
+    getAllCartsSequelize, 
     createCart,
     addItemToCart,
     deleteItemsFromCart,
     editItemInCart
 } = require('../services/carts-service');
 
-const { promisePool } = require('../db');
+const { promisePool, sequelize } = require('../db');
+
+const { Op } = require('sequelize');
 
 
 const fetchAllCarts = async (req, res, next) => {
@@ -27,7 +30,31 @@ const fetchAllCarts = async (req, res, next) => {
 
 const fetchCart = async (req, res, next) => {
     const { cartsId } = req.params;
+    const { selected } = req.body;
     const { user } = req;
+
+    const where = [
+        `carts.id = ${cartsId}`,
+        `carts.users_id = ${user.sub}`,
+        `prices.created_at = (SELECT MAX(created_at) FROM prices p WHERE p.books_id = books.id)`
+    ];
+
+    try {
+        if (selected) {
+            if (Array.isArray(selected) === false) {
+                throw new BadRequestError('Books IDs should be an array.');
+            }
+            const isBooksIdsValid = selected.every(id => Number.isInteger(id));
+            if (isBooksIdsValid === false) {
+                throw new BadRequestError('Books IDs must be integers.');
+            }
+
+            where.push(`carts_items.books_id IN (${selected.join(',')})`);
+        }
+    } catch (error) {
+        next(error);
+        return;
+    }
 
     const queryOptions = {
         select: [
@@ -67,11 +94,7 @@ const fetchCart = async (req, res, next) => {
                 type: 'LEFT'
             }
         ],
-        where: [
-            `carts.id = ${cartsId}`,
-            `carts.users_id = ${user.sub}`,
-            'prices.created_at = (SELECT MAX(created_at) FROM prices p WHERE p.books_id = books.id)'
-        ],
+        where
     };
 
     try {
@@ -89,21 +112,31 @@ const fetchCart = async (req, res, next) => {
 
 const fetchSelectedItemsFromCart = async (req, res, next) => {
     const { cartsId } = req.params;
-    const { booksIds } = req.body;
+    const { selected } = req.body;
     const { user } = req;
 
+    const where = [
+        `carts.id = ${cartsId}`,
+        `carts.users_id = ${user.sub}`,
+        `prices.created_at = (SELECT MAX(created_at) FROM prices p WHERE p.books_id = books.id)`
+    ];
+
     try {
-        if (booksIds === undefined || booksIds.length === 0) {
-            throw new BadRequestError('Books IDs are required.');
-        }
-        const isBooksIdsValid = booksIds.every(id => Number.isInteger(id));
-        if (isBooksIdsValid === false) {
-            throw new BadRequestError('Books IDs must be integers.');
+        if (selected) {
+            if (Array.isArray(selected) === false) {
+                throw new BadRequestError('Books IDs should be an array.');
+            }
+            const isBooksIdsValid = selected.every(id => Number.isInteger(id));
+            if (isBooksIdsValid === false) {
+                throw new BadRequestError('Books IDs must be integers.');
+            }
+            where.push(`carts_items.books_id IN (${selected.join(',')})`);
         }
     } catch (error) {
         next(error);
         return;
     }
+
     
     const queryOptions = {
         select: [
@@ -143,12 +176,7 @@ const fetchSelectedItemsFromCart = async (req, res, next) => {
                 type: 'LEFT'
             }
         ],
-        where: [
-            `carts.id = ${cartsId}`,
-            `carts.users_id = ${user.sub}`,
-            `carts_items.books_id IN (${booksIds.join(',')})`,
-            'prices.created_at = (SELECT MAX(created_at) FROM prices p WHERE p.books_id = books.id)'
-        ],
+        where
     };
 
     try {
@@ -166,21 +194,24 @@ const addCart = async (req, res, next) => {
     const { name = "Cart", description = "Cart for Items" } = req.body;
     const { user } = req;
 
-    const connection = await promisePool.getConnection();
-    await connection.beginTransaction();
 
+    const transaction = await sequelize.transaction();
     try {
-        const cartId = await createCart(connection, user.sub, name, description);
-        if (cartId === null) {
+        const cart = await createCart(
+            transaction, 
+            user.sub, 
+            name, 
+            description
+        );
+        if (cart == null) {
             throw new InternalServerError('Cart was not created. Please try again.');
         }
-        await connection.commit();
-        return res.status(StatusCodes.CREATED).json({ id: cartId });
+
+        await transaction.commit();
+        return res.status(StatusCodes.CREATED).json({ id: cart.id });
     } catch (error) {
-        await connection.rollback();
+        await transaction.rollback();
         next(error);
-    } finally {
-        connection.release();
     }
 };
 
@@ -189,37 +220,27 @@ const addCartItem = async (req, res, next) => {
     const { cartsId } = req.params;
     const { user } = req;
 
-    const connection = await promisePool.getConnection();
-    await connection.beginTransaction();
+    const transaction = await sequelize.transaction();
 
-    let cart;
     try {
         const carts = await getAllCarts({
             select: ['id'],
             where: [`users_id = ${user.sub}`, `id = ${cartsId}`],
         });
+
         // Check if cart exists, if not create one
         if (carts.length === 0) {
-            const cartId = await createCart(connection, user.sub, "Cart", "Cart for Items");
-            if (cartId === null) {
-                throw new InternalServerError('Cart was not created. Please try again.');
-            }
-            cart = { id: cartId };
-        } else {
-            cart = carts[0];
+            throw new NotFoundError('Cart not found.');
         }
 
-        const cartItemId = await addItemToCart(connection, cart.id, booksId, quantity);
-        if (cartItemId === null) {
-            throw new InternalServerError('Item was not added to cart. Please try again.');
-        }
-        await connection.commit();
-        return res.status(StatusCodes.CREATED).json({ id: cartItemId });
+        const cart = carts[0];
+        const cartsItem = await addItemToCart(transaction, cart.id, booksId, quantity);
+
+        await transaction.commit();
+        return res.status(StatusCodes.CREATED).json({ carts_items_id : cartsItem.id, carts_id: cart.id});
     } catch (error) {
-        await connection.rollback();
+        await transaction.rollback();
         next(error);
-    } finally {
-        connection.release();
     }
 };
 
@@ -227,8 +248,8 @@ const deleteCartItem = async (req, res, next) => {
     const { cartsId, booksId } = req.params;
     const { user } = req;
 
-    const connection = await promisePool.getConnection();
-    await connection.beginTransaction();
+
+    const transaction = await sequelize.transaction();
 
     try {
         const carts = await getAllCarts({
@@ -240,14 +261,12 @@ const deleteCartItem = async (req, res, next) => {
             throw new NotFoundError('Cart not found.');
         }
 
-        await deleteItemsFromCart(connection, cartsId, [booksId]);
-        await connection.commit();
+        await deleteItemsFromCart([booksId], cartsId, {transaction});
+        await transaction.commit();
         return res.status(StatusCodes.OK).end();
     } catch (error) {
-        await connection.rollback();
+        await transaction.rollback();
         next(error);
-    } finally {
-        connection.release();
     }
 };
 

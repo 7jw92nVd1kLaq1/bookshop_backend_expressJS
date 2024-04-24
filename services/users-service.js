@@ -14,6 +14,7 @@ const {
 
 const { Roles } = require('../models/auth-models');
 const { Users, UsersRoles } = require('../models/users-models');
+const { get } = require('../routes/carts');
 
 
 const assignUserRoles = async (connection, user_id, roles) => {
@@ -103,16 +104,7 @@ const createUser = async (transaction, email, password, nickname) => {
     }
 
     // Checking if user already exists
-    let user;
-    try {
-        user = await getUserByEmail(email);
-    } catch (error) {
-        if (!(error instanceof UserNotFoundError)) {
-            throw error;
-        }
-        user = null;
-    }
-
+    let user = await getUserByEmail(email);
     if (user) {
         throw new UserAlreadyExistsError();
     }
@@ -160,28 +152,31 @@ const createUser = async (transaction, email, password, nickname) => {
     }
 };
 
-const changeUserPassword = async (connection, user_id, password) => {
+const changeUserPassword = async (transaction, user_id, password) => {
     if (!checkPasswordRequirements(password)) {
         throw new PasswordDoesNotMeetRequirementsError();
     }
 
-    // Check if user exists, if not, throw an error
-    await getUserById(user_id, {columns: ['id']});
-
     const passwordHash = await generateBcryptHash(password);
-    const query = 'UPDATE users SET password = ? WHERE id = ?';
-    const values = [passwordHash, user_id];
 
-    let result;
-    try {
-        [result] = await connection.query(query, values);
-    } catch (error) {
-        console.log(`DB error occurred in "changeUserPasswordWithEmail": ${error.message}`);
-        throw new InternalServerError('Error occurred while changing user password. Please try again.');
+    // Check if user exists, if not, throw an error
+    const user = await Users.findOne({
+        where: {
+            id: user_id
+        }
+    });
+
+    if (!user) {
+        throw new UserNotFoundError();
     }
 
-    if (!result.affectedRows) {
-        throw new InternalServerError('User password was not changed. Please try again.');
+    try {
+        await user.update({
+            password: passwordHash
+        }, {transaction});
+    } catch (error) {
+        console.log(`DB error occurred in "changeUserPassword": ${error.message}`);
+        throw new InternalServerError('Error occurred while changing user password. Please try again.');
     }
 
     return true;
@@ -205,7 +200,7 @@ const getAllUsers = async ({columns = ['*'], joins = [], limit = null, orderBy =
     return users;
 };
 
-const getUserByEmail = async (email, queryOptions) => {
+const getUserByEmail = async (email, queryOptions = {}) => {
     if (!email) {
         throw new Error('Email is required');
     }
@@ -219,10 +214,6 @@ const getUserByEmail = async (email, queryOptions) => {
     queryOptions.where = {email};
 
     const user = await Users.findOne(queryOptions);
-    if (user == null) {
-        throw new UserNotFoundError();
-    }
-
     return user;
 };
 
@@ -238,7 +229,7 @@ const getUserById = async (id, options = {}) => {
     const user = users[0];
 
     if (!user) {
-        throw new UserNotFoundError();
+        return null;
     }
 
     return user;

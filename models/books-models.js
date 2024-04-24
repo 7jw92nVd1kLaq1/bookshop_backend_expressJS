@@ -76,6 +76,10 @@ const Books = sequelize.define('books', {
         }
     }
 }, {
+    name: {
+        singular: 'books',
+        plural: 'books'
+    },
     timestamps: false,
     hooks: {
         beforeUpdate: (book) => {
@@ -112,6 +116,10 @@ const BooksLikes = sequelize.define('books_likes', {
         }
     }
 }, {
+    name: {
+        singular: 'booksLike',
+        plural: 'booksLikes'
+    },
     timestamps: false
 });
 
@@ -152,6 +160,10 @@ const BooksImages = sequelize.define('books_images', {
         }
     }
 }, {
+    name: {
+        singular: 'booksImage',
+        plural: 'booksImages'
+    },
     timestamps: false
 });
 
@@ -184,6 +196,10 @@ const Prices = sequelize.define('prices', {
         }
     },
 }, {
+    name: {
+        singular: 'prices',
+        plural: 'prices'
+    },
     timestamps: false
 });
 
@@ -243,6 +259,10 @@ const Reviews = sequelize.define('reviews', {
         }
     }
 }, {
+    name: {
+        singular: 'reviews',
+        plural: 'reviews'
+    },
     timestamps: false,
     hooks: {
         beforeUpdate: (review) => {

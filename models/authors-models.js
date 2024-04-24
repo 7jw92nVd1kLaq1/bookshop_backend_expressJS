@@ -35,6 +35,10 @@ const Authors = sequelize.define('authors', {
         }
     }
 }, {
+    name: {
+        singular: 'author',
+        plural: 'authors'
+    },
     timestamps: false
 });
 
@@ -66,6 +70,10 @@ const AuthorsLikes = sequelize.define('authors_likes', {
         }
     }
 }, {
+    name: {
+        singular: 'authorsLike',
+        plural: 'authorsLikes'
+    },
     timestamps: false
 });
 

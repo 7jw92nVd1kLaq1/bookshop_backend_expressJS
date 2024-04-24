@@ -1,6 +1,12 @@
 const { StatusCodes } = require('http-status-codes');
 
-const { promisePool, sequelize } = require('../db');
+const { sequelize } = require('../db');
+const {
+    LoginFailedError
+} = require('../exceptions/auth-exceptions');
+const {
+    UserNotFoundError
+} = require('../exceptions/users-exceptions');
 const { 
     changeUserPassword,
     createUser, 
@@ -72,11 +78,13 @@ const signIn = async (req, res, next) => {
         };
 
         let user = await getUserByEmail(email, queryOptions);
+        if (user === null) {
+            throw new LoginFailedError();
+        }
+
         const isPasswordValid = await comparePlaintextToBcryptHash(password, user.get('password'));
         if (!isPasswordValid) {
-            return res.status(StatusCodes.UNAUTHORIZED).json({
-                message: 'Invalid email or password'
-            });
+            throw new LoginFailedError();
         }
 
         user = { 
@@ -122,7 +130,12 @@ const initiatePasswordResetProcess = async (req, res, next) => {
 
     let user; 
     try {
-        user = await getUserByEmail(email);
+        user = await getUserByEmail(email, {
+            attributes: ['id']        
+        });
+        if (user === null) {
+            throw new UserNotFoundError();
+        }
     } catch (error) {
         if (error.name && error.name === 'UserNotFoundError') {
             return res.status(StatusCodes.CREATED).json({
@@ -168,24 +181,21 @@ const completePasswordResetProcess = async (req, res, next) => {
             message: 'Password and confirm password do not match'
         });
     }
-    
-    const connection = await promisePool.getConnection();
-    await connection.beginTransaction();
+
+    const transaction = await sequelize.transaction();
 
     try {
         const code = await validatePasswordResetCode(resetCode);
-        await changeUserPassword(connection, code.users_id, password);
-        await markPasswordResetCodeAsUsed(connection, resetCode);
+        await changeUserPassword(transaction, code.users_id, password);
+        await markPasswordResetCodeAsUsed(transaction, resetCode);
 
-        await connection.commit();
+        await transaction.commit();
         return res.status(StatusCodes.OK).json({
             message: 'Password reset successful'
         });
     } catch (error) {
-        await connection.rollback();
+        await transaction.rollback();
         next(error);
-    } finally {
-        connection.release();
     }
 };
 

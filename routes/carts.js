@@ -39,6 +39,7 @@ router.get(
     [
         allowAccessToLoggedInUser,
         param('cartsId').isInt().toInt(),
+        body('selected').isArray().optional(),
         validate
     ],
     fetchCart
@@ -75,7 +76,7 @@ router.post(
 );
 
 router.delete(
-    '/:cartsId/items/:itemsId', 
+    '/:cartsId/items/:booksId', 
     [
         allowAccessToLoggedInUser,
         param('booksId').isInt().toInt(),
@@ -100,7 +101,7 @@ router.get(
     [
         allowAccessToLoggedInUser,
         param('cartsId').isInt().toInt(),
-        body('booksIds').isArray().toInt(),
+        body('selected').isArray().optional(),
         validate
     ],
     fetchSelectedItemsFromCart

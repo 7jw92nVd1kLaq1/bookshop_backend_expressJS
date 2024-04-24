@@ -35,6 +35,10 @@ const Categories = sequelize.define('categories', {
         }
     }
 }, {
+    name: {
+        singular: 'category',
+        plural: 'categories'
+    },
     timestamps: false,
     hooks: {
         beforeUpdate: (category) => {

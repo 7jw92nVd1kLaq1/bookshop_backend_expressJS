@@ -64,6 +64,10 @@ const Addresses = sequelize.define('addresses', {
         }
     }
 }, {
+    name: {
+        singular: 'address',
+        plural: 'addresses'
+    },
     timestamps: false
 });
 
@@ -119,6 +123,10 @@ const Orders = sequelize.define('orders', {
         }
     }
 }, {
+    name: {
+        singular: 'order',
+        plural: 'orders'
+    },
     timestamps: false,
     hooks: {
         beforeUpdate: (order) => {
@@ -156,6 +164,10 @@ const OrdersBooks = sequelize.define('orders_books', {
         allowNull: true
     }
 }, {
+    name: {
+        singular: 'ordersBook',
+        plural: 'ordersBooks'
+    },
     timestamps: false
 });
 
@@ -219,6 +231,10 @@ const TrackingCodes = sequelize.define('tracking_codes', {
         }
     }
 }, {
+    name: {
+        singular: 'trackingCode',
+        plural: 'trackingCodes'
+    }, 
     timestamps: false,
     hooks: {
         beforeUpdate: (trackingCode) => {

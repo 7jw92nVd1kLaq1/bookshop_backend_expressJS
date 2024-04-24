@@ -26,6 +26,10 @@ const Carts = sequelize.define('carts', {
         allowNull: true
     },
 }, {
+    name: {
+        singular: 'carts',
+        plural: 'carts'
+    },
     timestamps: false
 });
 
@@ -59,8 +63,8 @@ const CartsItems = sequelize.define('carts_items', {
         type: DataTypes.INTEGER,
         allowNull: true
     },
-    createdAt: {
-        field: 'created_at',
+    addedAt: {
+        field: 'added_at',
         type: DataTypes.DATE,
         allowNull: true,
         defaultValue: DataTypes.NOW,
@@ -78,6 +82,10 @@ const CartsItems = sequelize.define('carts_items', {
         }
     }
 }, {
+    name: {
+        singular: 'cartsItems',
+        plural: 'cartsItems'
+    },
     timestamps: false,
     hooks: {
         beforeUpdate: (cartItem) => {

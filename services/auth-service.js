@@ -36,27 +36,29 @@ const createUserToken = (user) => {
     );
 };
 
-const markPasswordResetCodeAsUsed = async (connection, code) => {
+const markPasswordResetCodeAsUsed = async (transaction, code) => {
     if (typeof code !== 'string') {
         throw new Error('Code must be a string');
     }
-    const query = 'UPDATE passwd_resets SET used = 1 WHERE url_code = ?';
-    const values = [code];
 
-    let result;
-    try {
-        [result] = await connection.query(query, values);
+    const passwdReset = await PasswdResets.findOne({
+        where: {
+            urlCode: code
+        }
+    });
+
+    if (!passwdReset) {
+        throw new PasswordResetCodeNotFoundOrExpiredError();
     }
-    catch (error) {
+
+    try {
+        await passwdReset.update({
+            used: true,
+        }, { transaction });
+    } catch (error) {
         console.log(`DB error occurred in "markPasswordResetCodeAsUsed": ${error.message}`);
         throw new InternalServerError('Error occurred while marking password reset code as used. Please try again.');
     }
-
-    if (!result.affectedRows) {
-        throw new InternalServerError('Password reset code was not marked as used. Please try again.');
-    }
-
-    return true;
 };
 
 const validatePasswordResetCode = async (code) => {

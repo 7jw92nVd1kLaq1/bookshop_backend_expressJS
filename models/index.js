@@ -29,7 +29,7 @@ Books.belongsTo(Authors, {
 });
 
 Books.belongsTo(Categories, {
-    foreignKey: 'categories_id'
+    foreignKey: 'categories_id',
 });
 
 Books.hasMany(BooksImages, {
@@ -51,11 +51,19 @@ Books.belongsToMany(Users, {
     uniqueKey: 'uniq_books_likes_key'
 });
 
+Books.hasMany(BooksLikes, {
+    foreignKey: 'books_id'
+});
+
 Books.hasMany(Prices, {
     foreignKey: 'books_id'
 });
 
 Books.hasMany(Reviews, {
+    foreignKey: 'books_id'
+});
+
+BooksLikes.belongsTo(Books, {
     foreignKey: 'books_id'
 });
 
