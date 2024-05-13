@@ -14,7 +14,6 @@ const {
 
 const { Roles } = require('../models/auth-models');
 const { Users, UsersRoles } = require('../models/users-models');
-const { get } = require('../routes/carts');
 
 
 const assignUserRoles = async (connection, user_id, roles) => {

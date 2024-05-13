@@ -1,5 +1,6 @@
 const { StatusCodes } = require('http-status-codes');
 const { promisePool, sequelize } = require('../db');
+const { Op } = require('sequelize');
 
 const {
     createBooks,
@@ -23,6 +24,7 @@ const {
 const {
     Authors
 } = require('../models/authors-models');
+const { where } = require('sequelize');
 
 
 const addBooks = async (req, res, next) => {
@@ -159,33 +161,45 @@ const fetchBooksByRecent = async (req, res, next) => {
         if (days) dateCondition = `${days} DAY`;
         if (!dateCondition) dateCondition = '1 MONTH';
 
-        const queryOptions = {
-            columns: [
-                'books.*', 
-                'categories.name as categories_name',
-                'authors.name as authors_name',
-                'COUNT(books_likes.books_id) as likes',
-            ],
-            wheres: [
-                `pub_date >= DATE_SUB(NOW(), INTERVAL ${dateCondition})`
-            ],
-            joins: [
-                {table: 'categories', on: 'books.categories_id = categories.id', type: 'LEFT'},
-                {table: 'authors', on: 'books.authors_id = authors.id', type: 'LEFT'},
-                {table: 'books_likes', on: 'books.id = books_likes.books_id', type: 'LEFT'},
-            ],
-            limit: amount ? amount : null,
-            offset: page ? (page - 1) * amount : null,
-            groupBy: ['books.id'],
-            orderBy: [{ column: 'pub_date', order: 'DESC' }]
-        };
-        
-        // Add liked column if user is logged in
+
+        const booksLikesAttributes = [
+            [sequelize.fn('COUNT', sequelize.col('books_id')), 'likes'],
+        ];
+
         if (user && user.sub) {
-            queryOptions.columns.push(`IF(books_likes.users_id = ${user.sub}, TRUE, FALSE) as liked`);
+            booksLikesAttributes.push(
+                [
+                    sequelize.fn('IF', sequelize.literal(`SUM(users_id = ${user.sub}) > 0`), true, false), 
+                    'liked'
+                ]
+            );
         }
 
-        const books = await getAllBooks(queryOptions);
+        const sequelizeQueryOptions = {
+            offset: page ? (page - 1) * amount : null,
+            limit: amount ? amount : null,
+            where: {
+                pub_date: {
+                    [Op.gte]: sequelize.literal(`DATE_SUB(NOW(), INTERVAL ${dateCondition})`)
+                }
+            },
+            attributes: {
+                exclude: ['categories_id', 'authors_id', 'categoriesId', 'authorsId'],
+            },
+            include: [
+                { model: Categories, attributes: ['id', 'name'], required: false},
+                { model: Authors, attributes: ['id', 'name'], required: false},
+                { 
+                    model: BooksLikes, 
+                    attributes: booksLikesAttributes, 
+                    required: false, 
+                    separate: true, 
+                    group: ['books_id']
+                }
+            ],
+        };
+
+        const books = await getAllBooksSequelize(sequelizeQueryOptions);
         if (books.length === 0)
             throw new BooksNotFoundError();
 
@@ -199,31 +213,47 @@ const fetchBooksByPopular = async (req, res, next) => {
     let { page, amount } = req.query;
     const { user } = req;
 
+    
     try {
-        const queryOptions = {
-            columns: [
-                'books.*', 
-                'categories.name as categories_name',
-                'authors.name as authors_name',
-                'COUNT(books_likes.books_id) as likes',
-            ],
-            joins: [
-                {table: 'categories', on: 'books.categories_id = categories.id', type: 'LEFT'},
-                {table: 'authors', on: 'books.authors_id = authors.id', type: 'LEFT'},
-                {table: 'books_likes', on: 'books.id = books_likes.books_id', type: 'LEFT'},
-            ],
-            limit: amount ? amount : null,
-            offset: page ? (page - 1) * amount : null,
-            groupBy: ['books.id'],
-            orderBy: [{ column: 'likes', order: 'DESC' }]
-        };
-        
-        // Add liked column if user is logged in
+        const booksLikesAttributes = [
+            [sequelize.fn('COUNT', sequelize.col('books_id')), 'likes'],
+        ];
+
         if (user && user.sub) {
-            queryOptions.columns.push(`IF(books_likes.users_id = ${user.sub}, TRUE, FALSE) as liked`);
+            booksLikesAttributes.push(
+                [
+                    sequelize.fn('IF', sequelize.literal(`SUM(users_id = ${user.sub}) > 0`), true, false), 
+                    'liked'
+                ]
+            );
         }
 
-        const books = await getAllBooks(queryOptions);
+        const queryOptionsSequelize = {
+            offset: page ? (page - 1) * amount : null,
+            limit: amount ? amount : null,
+            attributes: {
+                exclude: ['categories_id', 'authors_id', 'categoriesId', 'authorsId'],
+            },
+            include: [
+                { model: Categories, attributes: ['id', 'name'], required: false},
+                { model: Authors, attributes: ['id', 'name'], required: false},
+                { 
+                    model: BooksLikes, 
+                    attributes: booksLikesAttributes,
+                    required: false, 
+                    separate: true, 
+                    group: ['books_id']
+                }
+            ],
+        };
+
+        const books = await getAllBooksSequelize(queryOptionsSequelize);
+        books.sort((a, b) => {
+            const likesA = a.booksLikes.length > 0 ? a.booksLikes[0].get('likes') : 0;
+            const likesB = b.booksLikes.length > 0 ? b.booksLikes[0].get('likes') : 0;
+
+            return likesB - likesA;
+        });
         if (books.length === 0)
             throw new BooksNotFoundError();
 
@@ -305,4 +335,5 @@ module.exports = {
     fetchBooksLikes,
     fetchBookById,
     fetchBooksByRecent,
+    fetchBooksByPopular,
 };

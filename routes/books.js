@@ -9,7 +9,8 @@ const {
     fetchAllBooks,
     fetchBooksLikes,
     fetchBookById,
-    fetchBooksByRecent
+    fetchBooksByRecent,
+    fetchBooksByPopular
 } = require('../controllers/books-controller');
 const { 
     adminOnly,
@@ -51,7 +52,7 @@ router.get(
         query('page').optional().isInt().toInt(),
         query('amount').optional().isInt().toInt(),
     ],
-    fetchBooksByRecent
+    fetchBooksByPopular
 );
 
 
